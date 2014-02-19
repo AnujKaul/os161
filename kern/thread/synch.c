@@ -39,6 +39,7 @@
 #include <thread.h>
 #include <current.h>
 #include <synch.h>
+#define MAX_THREADS 20
 
 ////////////////////////////////////////////////////////////
 //
@@ -165,7 +166,20 @@ lock_create(const char *name)
         
         // add stuff here as needed
         
-        return lock;
+        lock->lk_wchan=wchan_create(lock->lk_name);
+	if(lock->lk_wchan == NULL)
+	{
+		kfree(lock->lk_name);
+		kfree(lock);
+		return NULL;
+	}
+
+	spinlock_init(&lock->lk_lock);//useless
+	//lock->lk_count = 1;//useless
+
+	lock->lk_thread = NULL;
+	return lock;
+
 }
 
 void
@@ -174,25 +188,50 @@ lock_destroy(struct lock *lock)
         KASSERT(lock != NULL);
 
         // add stuff here as needed
-        
-        kfree(lock->lk_name);
-        kfree(lock);
+	spinlock_cleanup(&lock->lk_lock);//u
+	wchan_destroy(lock->lk_wchan);
+
+    kfree(lock->lk_name);
+	lock->lk_thread = NULL;
+    kfree(lock);
 }
 
 void
 lock_acquire(struct lock *lock)
 {
         // Write this
+	KASSERT(lock != NULL);
 
-        (void)lock;  // suppress warning until code gets written
+	//KASSERT(curthread->t_in_interrupt == false);
+    spinlock_acquire(&lock->lk_lock);
+	// For deadlock
+    KASSERT(lock->lk_thread != curthread);
+    if(!lock->lk_thread)
+	{
+		lock->lk_thread = curthread;
+		spinlock_release(&lock->lk_lock);
+		return;
+	}
+    while(lock->lk_thread != NULL)
+	{
+		wchan_lock(lock->lk_wchan); // obtain lock on wait channel; blocking function
+		spinlock_release(&lock->lk_lock); // release spin lock;
+        wchan_sleep(lock->lk_wchan); // sleep until the lock becomes available
+		spinlock_acquire(&lock->lk_lock);  // will only come to this line when the resource becomes available
+    }
+	lock->lk_thread = curthread; //what thread acquired the lock
+	spinlock_release(&lock->lk_lock);
 }
 
 void
 lock_release(struct lock *lock)
 {
-        // Write this
+    KASSERT(lock != NULL);
 
-        (void)lock;  // suppress warning until code gets written
+    KASSERT(lock->lk_thread == curthread);
+	lock->lk_thread = NULL;
+	wchan_wakeall(lock->lk_wchan);
+    //(void)lock;  // suppress warning until code gets written
 }
 
 bool
@@ -200,9 +239,8 @@ lock_do_i_hold(struct lock *lock)
 {
         // Write this
 
-        (void)lock;  // suppress warning until code gets written
-
-        return true; // dummy until code gets written
+        //(void)lock;  // suppress warning until code gets written
+	return (curthread == lock->lk_thread);
 }
 
 ////////////////////////////////////////////////////////////
@@ -225,9 +263,19 @@ cv_create(const char *name)
                 kfree(cv);
                 return NULL;
         }
-        
         // add stuff here as needed
+
+
+        cv->cv_wchan= wchan_create(cv-> cv_name); 	//creating wait q for the given condition
+
+        if(!cv->cv_wchan){  		//is NULL
+        	kfree(cv->cv_wchan);
+        	kfree(cv);
+        	return NULL;
+        }
         
+       
+
         return cv;
 }
 
@@ -237,7 +285,7 @@ cv_destroy(struct cv *cv)
         KASSERT(cv != NULL);
 
         // add stuff here as needed
-        
+        wchan_destroy(cv->cv_wchan);	//purge the wait q..
         kfree(cv->cv_name);
         kfree(cv);
 }
@@ -246,22 +294,146 @@ void
 cv_wait(struct cv *cv, struct lock *lock)
 {
         // Write this
-        (void)cv;    // suppress warning until code gets written
-        (void)lock;  // suppress warning until code gets written
+		//assuring cv and lock are passed with non null arguments
+		KASSERT(cv != NULL && lock != NULL);
+
+		//	    KASSERT(curthread->t_in_interrupt == false);  //un comment if necessary.. not req
+
+		if(!lock_do_i_hold(lock)) {
+			lock_acquire(lock);
+		}
+		wchan_lock(cv->cv_wchan);
+		lock_release(lock);
+		wchan_sleep(cv->cv_wchan);
+		if(!lock_do_i_hold(lock)) {
+			lock_acquire(lock);
+		}
 }
 
 void
 cv_signal(struct cv *cv, struct lock *lock)
 {
-        // Write this
-	(void)cv;    // suppress warning until code gets written
-	(void)lock;  // suppress warning until code gets written
+	// Write this
+	//assuring cv and lock are passed with non null arguments
+	KASSERT(cv != NULL && lock != NULL);
+
+	//	    KASSERT(curthread->t_in_interrupt == false);  //un comment if necessary.. not req
+
+	if(!lock_do_i_hold(lock)) {
+		lock_acquire(lock);
+	}
+	wchan_wakeone(cv->cv_wchan);
+	//(void)cv;    // suppress warning until code gets written
+	//(void)lock;  // suppress warning until code gets written
 }
 
 void
 cv_broadcast(struct cv *cv, struct lock *lock)
 {
 	// Write this
-	(void)cv;    // suppress warning until code gets written
-	(void)lock;  // suppress warning until code gets written
+	//assuring cv and lock are passed with non null arguments
+	KASSERT(cv != NULL && lock != NULL);
+
+	//	    KASSERT(curthread->t_in_interrupt == false);  //un comment if necessary.. not req
+
+	if(!lock_do_i_hold(lock)) {
+		lock_acquire(lock);
+	}
+	wchan_wakeall(cv->cv_wchan);
+
+}
+
+
+
+///// Read-Write Locks
+struct
+rwlock *rwlock_create(const char *name)
+{
+	struct rwlock *rw_lock;
+
+	rw_lock = kmalloc(sizeof(struct rwlock));
+	if(rw_lock == NULL)
+	{
+		return NULL;
+	}
+
+	rw_lock->rwlock_name = kstrdup(name);
+	if(rw_lock->rwlock_name == NULL)
+	{
+		kfree(rw_lock);
+		return NULL;
+	}
+
+	rw_lock->sem = sem_create(rw_lock->rwlock_name,MAX_THREADS);
+	if(rw_lock->sem == NULL)
+	{
+		kfree(rw_lock->rwlock_name);
+		kfree(rw_lock);
+		return NULL;
+	}
+
+	rw_lock->lk = lock_create(rw_lock->rwlock_name);
+	if(rw_lock->lk == NULL)
+	{
+		kfree(rw_lock->rwlock_name);
+		kfree(rw_lock);
+		return NULL;
+	}
+	return rw_lock;
+
+}
+
+void rwlock_destroy(struct rwlock * rw_lock)
+{
+	KASSERT(rw_lock != NULL);
+
+	kfree(rw_lock->rwlock_name);
+	kfree(rw_lock);
+}
+
+void rwlock_acquire_read(struct rwlock *rw_lock)
+{
+	KASSERT(rw_lock  !=  NULL);
+
+        KASSERT(curthread->t_in_interrupt == false);
+	lock_acquire(rw_lock->lk);
+        P(rw_lock->sem);
+	lock_release(rw_lock->lk);
+}
+
+void rwlock_release_read(struct rwlock *rw_lock)
+{
+	KASSERT(rw_lock != NULL);
+
+	V(rw_lock->sem);
+}
+
+void rwlock_acquire_write(struct rwlock *rw_lock)
+{
+	int max_tries;
+
+	KASSERT(rw_lock  !=  NULL);
+
+        KASSERT(curthread->t_in_interrupt == false);
+
+	lock_acquire(rw_lock->lk);
+	for(max_tries = 0; max_tries<MAX_THREADS;max_tries++)
+	{
+		P(rw_lock->sem);
+	}
+	lock_release(rw_lock->lk);
+}
+
+void rwlock_release_write(struct rwlock *rw_lock)
+{
+
+	int max_tries;
+
+	KASSERT(rw_lock  !=  NULL);
+
+	for(max_tries = 0; max_tries<MAX_THREADS;max_tries++)
+	{
+		V(rw_lock->sem);
+	}
+
 }

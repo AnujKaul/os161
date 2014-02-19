@@ -75,6 +75,11 @@ void V(struct semaphore *);
 struct lock {
         char *lk_name;
         // add what you need here
+       // added by Aditya Singla: 02/15/14
+        struct thread *lk_thread; //name of current thread holding the lock. For locks only the thread that obtained it can release the lock
+        struct wchan *lk_wchan; // wait channel for lock
+	    struct spinlock lk_lock;
+        //volatile int lk_count; // will only have value 0 and 1 as a lock can only be provided once
         // (don't forget to mark things volatile as needed)
 };
 
@@ -113,6 +118,8 @@ void lock_destroy(struct lock *);
 
 struct cv {
         char *cv_name;
+        struct wchan *cv_wchan;
+
         // add what you need here
         // (don't forget to mark things volatile as needed)
 };
@@ -130,12 +137,12 @@ void cv_destroy(struct cv *);
  * For all three operations, the current thread must hold the lock passed 
  * in. Note that under normal circumstances the same lock should be used
  * on all operations with any particular CV.
- *
+  *
  * These operations must be atomic. You get to write them.
  */
 void cv_wait(struct cv *cv, struct lock *lock);
 void cv_signal(struct cv *cv, struct lock *lock);
-void cv_broadcast(struct cv *cv, struct lock *lock);
+ void cv_broadcast(struct cv *cv, struct lock *lock);
 
 /*
  * 13 Feb 2012 : GWA : Reader-writer locks.
@@ -143,6 +150,8 @@ void cv_broadcast(struct cv *cv, struct lock *lock);
 
 struct rwlock {
         char *rwlock_name;
+	struct lock *lk;
+	struct semaphore *sem;
 };
 
 struct rwlock * rwlock_create(const char *);

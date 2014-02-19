@@ -43,18 +43,35 @@
  * You should implement your solution to the whalemating problem below.
  */
 
+static struct semaphore *male_whale;
+static struct semaphore *female_whale;
+static struct semaphore *match_male;
+static struct semaphore *match_female;
+static struct lock *lk;
+
+
 // 13 Feb 2012 : GWA : Adding at the suggestion of Isaac Elbaz. These
 // functions will allow you to do local initialization. They are called at
 // the top of the corresponding driver code.
 
 void whalemating_init() {
-  return;
+ 	male_whale= sem_create("male",0);
+	female_whale = sem_create("female",0);
+ 	match_male= sem_create("match_male",0);
+	match_female= sem_create("match_female",0);
+	lk = lock_create("matchmaker");
+	return;
 }
 
 // 20 Feb 2012 : GWA : Adding at the suggestion of Nikhil Londhe. We don't
 // care if your problems leak memory, but if you do, use this to clean up.
 
 void whalemating_cleanup() {
+	sem_destroy(male_whale);
+	sem_destroy(female_whale);
+	sem_destroy(match_male);
+	sem_destroy(match_female);
+	lock_destroy(lk);
   return;
 }
 
@@ -66,6 +83,10 @@ male(void *p, unsigned long which)
   
   male_start();
 	// Implement this function 
+        V(match_male);
+	P(female_whale);
+        
+	
   male_end();
 
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
@@ -82,7 +103,11 @@ female(void *p, unsigned long which)
   
   female_start();
 	// Implement this function 
-  female_end();
+	V(match_female);
+	P(male_whale);
+	
+	
+   female_end();
   
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // whalemating driver can return to the menu cleanly.
@@ -97,6 +122,12 @@ matchmaker(void *p, unsigned long which)
   (void)which;
   
   matchmaker_start();
+	P(match_male);
+	P(match_female);
+	lock_acquire(lk);
+	V(male_whale);
+	V(female_whale);
+	lock_release(lk);
 	// Implement this function 
   matchmaker_end();
   
