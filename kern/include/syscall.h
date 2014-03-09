@@ -65,7 +65,7 @@ int sys__write(int,void *,size_t , int *);
 
 int sys__read(int,void *,size_t, int *);
 
-off_t sys__lseek(int, off_t , int, int *);
+off_t sys__lseek(int, off_t , int, off_t *);
 
 int sys__chdir(char *, int *);
 
