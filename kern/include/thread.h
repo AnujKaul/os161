@@ -39,6 +39,8 @@
 #include <spinlock.h>
 #include <threadlist.h>
 
+
+
 struct addrspace;
 struct cpu;
 struct vnode;
@@ -74,7 +76,10 @@ struct thread {
 	char *t_name;			/* Name of this thread */
 	const char *t_wchan_name;	/* Name of wait channel, if sleeping */
 	threadstate_t t_state;		/* State this thread is in */
-
+	//File Table Added Aditya Singla
+	struct fdesc * t_filetable[256];
+	//Process Id Field Added Aditya Singla
+	pid_t processId;
 	/*
 	 * Thread subsystem internal fields.
 	 */
@@ -112,6 +117,7 @@ struct thread {
 	struct vnode *t_cwd;		/* current working directory */
 
 	/* add more here as needed */
+
 };
 
 /* Call once during system startup to allocate data structures. */
@@ -163,6 +169,5 @@ void schedule(void);
  * timer interrupt.
  */
 void thread_consider_migration(void);
-
 
 #endif /* _THREAD_H_ */

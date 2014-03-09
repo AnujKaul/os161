@@ -108,6 +108,52 @@ syscall(struct trapframe *tf)
 		err = sys___time((userptr_t)tf->tf_a0,
 				 (userptr_t)tf->tf_a1);
 		break;
+	    case SYS_open:
+		err = sys__open((char *)tf->tf_a0,tf->tf_a1,tf->tf_a2,&retval);
+		break;
+	    case SYS_close:
+		err = sys__close(tf->tf_a0,&retval);
+		break;
+	    case SYS_read:
+		err = sys__read(tf->tf_a0,(void *)tf->tf_a1,tf->tf_a2,&retval);
+		break;
+	    case SYS_write:
+		err = sys__write(tf->tf_a0,(void *)tf->tf_a1,tf->tf_a2,&retval);
+		break;
+	    case SYS_lseek:
+                    off_t pos = 0;
+                    pos =pos | tf->tf_a2;
+                    pos = pos<<32 ;
+                    pos = pos | tf->tf_a3;
+ 
+                    int whence;
+                        if ((err = copyin((const_userptr_t)(tf->tf_sp+16), &whence, sizeof(whence))) != 0) {
+                            break;
+                        }
+ 
+                    off_t ret;
+                    err=sys__lseek((int)tf->tf_a0,pos,whence,&ret);
+                    if (!err) {
+                            retval = ret>>32;
+                            tf->tf_v1 = ret;
+                    }
+ 
+                    break;
+            case SYS___getcwd:
+                    err=sys___getcwd((char *)tf->tf_a0,tf->tf_a1,&retval);
+                    break;
+            case SYS_dup2:
+                    err=sys__dup2(tf->tf_a0,tf->tf_a1,&retval);
+                    break;
+            case SYS_chdir:
+                    err=sys__chdir((char *)tf->tf_a0,&retval);
+                    break;
+	    case SYS_getpid:
+		    err = sys__getpid(&retval);
+		    break;
+	    case SYS_waitpid:
+		    err = sys__waitpid(tf->tf_a0,(int *)tf->tf_a1,tf->tf_a2,&retval);
+		    break;
 
 	    /* Add stuff here */
  

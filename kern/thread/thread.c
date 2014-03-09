@@ -33,6 +33,7 @@
 
 #include <types.h>
 #include <kern/errno.h>
+#include <kern/fcntl.h>
 #include <lib.h>
 #include <array.h>
 #include <cpu.h>
@@ -47,7 +48,9 @@
 #include <addrspace.h>
 #include <mainbus.h>
 #include <vnode.h>
-
+#include <vfs.h>
+#include <fdesc.h>
+#include <process.h>
 #include "opt-synchprobs.h"
 #include "opt-defaultscheduler.h"
 
@@ -66,6 +69,7 @@ struct wchan {
 DECLARRAY(cpu);
 DEFARRAY(cpu, /*no inline*/ );
 static struct cpuarray allcpus;
+
 
 /* Used to wait for secondary CPUs to come online. */
 static struct semaphore *cpu_startup_sem;
@@ -117,7 +121,15 @@ static
 struct thread *
 thread_create(const char *name)
 {
+	//kprintf("here");
 	struct thread *thread;
+	//int result;
+	int i;
+	//int result;	// Result for vfs command
+	//char devname[16]; //Name for console device // 03-02-2014
+	//struct vnode *vn; // vnode for fdesc
+	
+	
 
 	DEBUGASSERT(name != NULL);
 
@@ -126,9 +138,11 @@ thread_create(const char *name)
 		return NULL;
 	}
 
+	
 	thread->t_name = kstrdup(name);
 	if (thread->t_name == NULL) {
 		kfree(thread);
+		
 		return NULL;
 	}
 	thread->t_wchan_name = "NEW";
@@ -152,11 +166,26 @@ thread_create(const char *name)
 	/* VFS fields */
 	thread->t_cwd = NULL;
 
-	/* If you add to struct thread, be sure to initialize here */
+	for(i=0;i<256;i++)
+	{
+		thread->t_filetable[i] = NULL;
+	}
 
+////Aditya Singla: 03/08/2014
+	if(process_start(thread)!=0)
+	{
+		kfree(thread);
+		
+		return NULL;
+	}
+/////End	
+
+	
 	return thread;
 }
 
+////Adding code for processes: Aditya Singla
+//////End
 /*
  * Create a CPU structure. This is used for the bootup CPU and
  * also for secondary CPUs.
@@ -171,7 +200,7 @@ cpu_create(unsigned hardware_number)
 	struct cpu *c;
 	int result;
 	char namebuf[16];
-
+	
 	c = kmalloc(sizeof(*c));
 	if (c == NULL) {
 		panic("cpu_create: Out of memory\n");
@@ -256,6 +285,12 @@ thread_destroy(struct thread *thread)
 	if (thread->t_stack != NULL) {
 		kfree(thread->t_stack);
 	}
+
+	/* Aditya Singla : Clear filetable */
+	/*if(thread->t_filetable !=NULL)
+	{
+		kfree(thread->t_filetable);
+	}*/
 	threadlistnode_cleanup(&thread->t_listnode);
 	thread_machdep_cleanup(&thread->t_machdep);
 
@@ -813,10 +848,11 @@ thread_exit(void)
 		as_activate(NULL);
 		as_destroy(as);
 	}
+	
 
 	/* Check the stack guard band. */
 	thread_checkstack(cur);
-
+	
 	/* Interrupts off on this processor */
         splhigh();
 	thread_switch(S_ZOMBIE, NULL);
