@@ -79,7 +79,7 @@ int sys__open(char * filename,int flags, mode_t mode, int* ret)
 int sys__close(int fd, int *ret)
 {
 	
-	if(fd<3 || fd>256)
+	if(fd<3 || fd>255)
 	{
 		*ret = EBADF;
 		return -1;
@@ -110,6 +110,12 @@ int sys__write(int fd,void * buff,size_t nbytes, int *ret)
 	kbuff = kmalloc(nbytes);
 	int result;	
 	result = copyin((const_userptr_t)buff, kbuff, nbytes);
+	if(buff == NULL)
+	{
+		kfree(buff);
+		*ret = EFAULT;
+		return -1;
+	}
 	if(result !=0)
 	{
 		kfree(kbuff);
@@ -123,7 +129,7 @@ int sys__write(int fd,void * buff,size_t nbytes, int *ret)
 	}	
 	struct fdesc * file;
 	int err;
-	if(fd > 256)
+	if(fd > 255 || fd < 0)
 	{
 		kfree(kbuff);
 		*ret = EBADF;
@@ -173,8 +179,13 @@ int sys__read(int fd,void * buff,size_t nbytes, int *ret)
 		initialize_file_table(curthread);
 	}
 	struct fdesc * file;
-	
-	if(fd > 256)
+	if(buff == NULL)
+	{
+		kfree(buff);
+		*ret = EFAULT;
+		return -1;
+	}
+	if(fd > 255 || fd < 0)
 	{
 		kfree(kbuff);
 		*ret = EBADF;
@@ -197,13 +208,15 @@ int sys__read(int fd,void * buff,size_t nbytes, int *ret)
 	u.uio_iovcnt = 1;
 	u.uio_offset = file->offset;
 	u.uio_resid = nbytes;
-	u.uio_segflg = UIO_USERSPACE;
+	u.uio_segflg = UIO_SYSSPACE;
 	u.uio_rw = UIO_READ;
-	u.uio_space = curthread->t_addrspace;
+	u.uio_space = NULL;
+	
 	lock_acquire(file->lk);
 
 	if((err = VOP_READ(file->vn,&u)) != 0)
 	{
+		
 		kfree(kbuff);
 		*ret = err;	
 		return err;
@@ -280,14 +293,14 @@ void initialize_file_table(struct thread * thread)
 }
 
 //lseek....
-off_t sys__lseek(int currfiledesc, off_t offsetPos, int whence, int *returnval){
+off_t sys__lseek(int currfiledesc, off_t offsetPos, int whence, off_t *returnval){
  
     off_t retoffset;
     int errcode;
  
- 
+
     // current file desc for the current thread shouldnt be null
-    if( curthread->t_filetable == NULL){
+    if( curthread->t_filetable[currfiledesc] == NULL){
         *returnval = -1;
         return EBADF;
     }
@@ -303,31 +316,33 @@ off_t sys__lseek(int currfiledesc, off_t offsetPos, int whence, int *returnval){
  
     struct fdesc* curFile = curthread->t_filetable[currfiledesc];
  
-    struct stat *chkfilend;
-    chkfilend = (struct stat *)kmalloc(sizeof(struct stat));
+    struct stat chkfilend;
+    
  
     lock_acquire(curthread->t_filetable[currfiledesc]->lk);
- 
+ 	
     switch(whence)  {
  
         case SEEK_CUR:
             //the new position is pos as per manual definition
             //so is set as the retoffset
-            retoffset = offsetPos;
+	    retoffset = curFile->offset + offsetPos;            
+		
             break;
         case SEEK_SET:
             //the new position is the current position plus pos
-            retoffset = curFile->offset + offsetPos;
+            retoffset = offsetPos;
             break;
         case SEEK_END:
             //the new position is the position of end-of-file plus pos
             //call to VOP_STAT gives the status which is a structure having file info
             // check if info is not available then throw error
-            if((errcode = VOP_STAT(curFile->vn,chkfilend))){
+            if((errcode = VOP_STAT(curFile->vn,&chkfilend))){
                 return errcode;
             }
             //accessing the file size in bytes and adding new pos to it
-            retoffset = chkfilend->st_size + offsetPos;
+		
+            retoffset = chkfilend.st_size + offsetPos;
             break;
         default:
             //invalid whence
@@ -375,7 +390,7 @@ int sys___getcwd(char *buf, size_t buflen, int *returnval){
     //struct fdesc curFle = curthread->t_filetable;
  
     // now initializing uio object..
-    cwdiov.iov_ubase = cwdname;
+    cwdiov.iov_ubase = (userptr_t)cwdname;
     cwdiov.iov_len = buflen-1;
     cwdu.uio_iov = &cwdiov;
     cwdu.uio_iovcnt = 1;

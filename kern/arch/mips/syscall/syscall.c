@@ -82,9 +82,10 @@ syscall(struct trapframe *tf)
 	int callno;
 	int32_t retval;
 	int err;
-	off_t pos;
+	off_t pos = 0;
 	int whence;
 	off_t ret;
+
 
 	KASSERT(curthread != NULL);
 	KASSERT(curthread->t_curspl == 0);
@@ -125,11 +126,11 @@ syscall(struct trapframe *tf)
 		err = sys__write(tf->tf_a0,(void *)tf->tf_a1,tf->tf_a2,&retval);
 		break;
 	    case SYS_lseek:
-                
-                pos = pos | tf->tf_a2;
-                pos = pos<<32 ;
-                pos = pos | tf->tf_a3;
- 
+		
+                pos |=  tf->tf_a2;
+                pos <<= 32;
+                pos |= tf->tf_a3;
+ 		
                 
                 if ((err = copyin((const_userptr_t)(tf->tf_sp+16), &whence, sizeof(whence))) != 0) {
                      break;
