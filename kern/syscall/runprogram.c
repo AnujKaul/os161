@@ -44,6 +44,10 @@
 #include <vfs.h>
 #include <syscall.h>
 #include <test.h>
+#include <synch.h>
+#include <kern/seek.h>
+#include <stat.h> 
+#include <fdesc.h>
 
 /*
  * Load program "progname" and start running it in usermode.
@@ -94,6 +98,8 @@ runprogram(char *progname)
 		/* thread_exit destroys curthread->t_addrspace */
 		return result;
 	}
+	
+	initialize_file_table(curthread);
 
 	/* Warp to user mode. */
 	enter_new_process(0 /*argc*/, NULL /*userspace addr of argv*/,
@@ -102,5 +108,64 @@ runprogram(char *progname)
 	/* enter_new_process does not return. */
 	panic("enter_new_process returned\n");
 	return EINVAL;
+}
+
+
+
+void initialize_file_table(struct thread * thread)
+{
+	int result;
+	char * console = NULL;
+	struct vnode * vn;
+	console = kstrdup("con:");
+	//strcpy(devname,"con:");
+	
+	result = vfs_open(console,O_WRONLY,0664,&vn);
+	kfree(console);
+	if(result)
+	{
+ 		panic("Vfs_open:STDIN to filetable: %s\n",strerror(result));
+	}
+	
+	thread->t_filetable[0] = (struct fdesc *)kmalloc(sizeof(struct fdesc));	
+	strcpy(thread->t_filetable[0]->name,"STDIN");
+	thread->t_filetable[0]->offset = 0;
+	thread->t_filetable[0]->flag = 0;
+	thread->t_filetable[0]->ref_count = 0;
+	thread->t_filetable[0]->lk = lock_create(thread->t_filetable[0]->name);
+	thread->t_filetable[0]->vn = vn;
+
+	//STDOUT
+	console = kstrdup("con:");
+	result = vfs_open(console,O_RDONLY,0664,&vn);
+	if(result)
+	{
+		panic("Vfs_open:STDOUT to filetable: %s\n",strerror(result));
+	}
+	
+	thread->t_filetable[1] = (struct fdesc *)kmalloc(sizeof(struct fdesc));	
+	strcpy(thread->t_filetable[1]->name,"STDOUT");
+	thread->t_filetable[1]->offset = 0;
+	thread->t_filetable[1]->flag = 0;
+	thread->t_filetable[1]->ref_count = 0;
+	thread->t_filetable[1]->lk = lock_create(thread->t_filetable[1]->name);
+	thread->t_filetable[1]->vn = vn;
+	
+	//STDERR
+	console = kstrdup("con:");
+	result = vfs_open(console,O_WRONLY,0664,&vn);
+	if(result)
+	{
+		panic("Vfs_open:STDERR to filetable: %s\n",strerror(result));
+	}
+
+	thread->t_filetable[2] = (struct fdesc *)kmalloc(sizeof(struct fdesc));	
+	strcpy(thread->t_filetable[2]->name,"STDERR");
+	thread->t_filetable[2]->offset = 0;
+	thread->t_filetable[2]->flag = 0;
+	thread->t_filetable[2]->ref_count = 0;
+	thread->t_filetable[2]->lk = lock_create(thread->t_filetable[2]->name);
+	thread->t_filetable[2]->vn = vn;
+
 }
 

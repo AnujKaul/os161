@@ -19,7 +19,7 @@
 
 #define MAX_FILENAME_SIZE 32
 
-void initialize_file_table(struct thread *);
+
 
 
 int sys__open(char * filename,int flags, mode_t mode, int* ret)
@@ -32,20 +32,16 @@ int sys__open(char * filename,int flags, mode_t mode, int* ret)
 	result = copyinstr((const_userptr_t)filename, kfilename, MAX_FILENAME_SIZE, &len);
 	if(result != 0)
 	{
-		*ret = EFAULT;
-		return -1;
+
+		return EFAULT;
 	}
 	//Check if file name provided by user is null or not
 	if(kfilename == NULL)
 	{
-		*ret = EFAULT;
-		return -1;
+
+		return EFAULT;
 	}	
 	//initialize STDIN,STDOUT,STDERR - lazy loading
-	if(curthread->t_filetable[0] == NULL)
-	{
-		initialize_file_table(curthread);
-	}
 	//create fdesc structure
 	struct fdesc * file;
 	//allocate memory - should be free if and error occurs
@@ -53,8 +49,8 @@ int sys__open(char * filename,int flags, mode_t mode, int* ret)
 	//call vfs_open to open a vnode
 	result = vfs_open(kfilename,flags,mode,&file->vn);
 	if(*ret != 0){ 
-		*ret = result;
-		return -1;
+
+		return result;
 	}
 	file->offset = 0;
 	file->ref_count++;
@@ -71,8 +67,8 @@ int sys__open(char * filename,int flags, mode_t mode, int* ret)
 		}
 	}
 	//means that place in the filetable - too many open files
-	*ret = EMFILE;
-	return -1;
+
+	return EMFILE;
 	
 }
 
@@ -81,8 +77,8 @@ int sys__close(int fd, int *ret)
 	
 	if(fd<3 || fd>255)
 	{
-		*ret = EBADF;
-		return -1;
+
+		return EBADF;
 	}
 
 	if(curthread->t_filetable[fd] != NULL)
@@ -98,8 +94,8 @@ int sys__close(int fd, int *ret)
 		return 0;
 		
 	}
-	*ret = EBADF;
-	return -1;
+	*ret = 0;
+	return EBADF;
 	
 }
 
@@ -113,33 +109,29 @@ int sys__write(int fd,void * buff,size_t nbytes, int *ret)
 	if(buff == NULL)
 	{
 		kfree(buff);
-		*ret = EFAULT;
-		return -1;
+
+		return EFAULT;
 	}
 	if(result !=0)
 	{
 		kfree(kbuff);
-		*ret = result;
-		return -1;
+
+		return result;
 	}
 	
-	if(curthread->t_filetable[0] == NULL)
-	{
-		initialize_file_table(curthread);
-	}	
 	struct fdesc * file;
 	int err;
 	if(fd > 255 || fd < 0)
 	{
 		kfree(kbuff);
-		*ret = EBADF;
-		return -1;
+
+		return EBADF;
 	}
 	if(curthread->t_filetable[fd] == NULL)
 	{
 		kfree(kbuff);
-		*ret = EBADF;
-		return -1;
+
+		return EBADF;
 	}
 	file = curthread->t_filetable[fd];
 	struct iovec iov;
@@ -158,8 +150,8 @@ int sys__write(int fd,void * buff,size_t nbytes, int *ret)
 	if((err = VOP_WRITE(file->vn,&u)) != 0)
 	{
 		kfree(kbuff);
-		*ret = EBADF;
-		return -1;
+
+		return EBADF;
 	}
 	kfree(kbuff);
 	file->offset = u.uio_offset;
@@ -174,28 +166,25 @@ int sys__read(int fd,void * buff,size_t nbytes, int *ret)
 	int result;
 	kbuff = kmalloc(nbytes);
 	int err;	
-	if(curthread->t_filetable[0] == NULL)
-	{
-		initialize_file_table(curthread);
-	}
+
 	struct fdesc * file;
 	if(buff == NULL)
 	{
 		kfree(buff);
-		*ret = EFAULT;
-		return -1;
+
+		return EFAULT;
 	}
 	if(fd > 255 || fd < 0)
 	{
 		kfree(kbuff);
-		*ret = EBADF;
-		return -1;
+
+		return EBADF;
 	}
 	if(curthread->t_filetable[fd] == NULL)
 	{
 		kfree(kbuff);
-		*ret = EBADF;
-		return -1;
+
+		return EBADF;
 	}
 	
 	file = curthread->t_filetable[fd];
@@ -218,15 +207,15 @@ int sys__read(int fd,void * buff,size_t nbytes, int *ret)
 	{
 		
 		kfree(kbuff);
-		*ret = err;	
+
 		return err;
 	}
 	result = copyout(kbuff,(userptr_t)buff,nbytes);
 	if(result != 0)
 	{
 		kfree(kbuff);
-		*ret = result;
-		return -1;
+
+		return result;
 	}
 	kfree(kbuff);
 	file->offset = u.uio_offset;
@@ -235,62 +224,6 @@ int sys__read(int fd,void * buff,size_t nbytes, int *ret)
 	return 0;
 }
 
-void initialize_file_table(struct thread * thread)
-{
-	int result;
-	char * console = NULL;
-	struct vnode * vn;
-	console = kstrdup("con:");
-	//strcpy(devname,"con:");
-	
-	result = vfs_open(console,O_WRONLY,0664,&vn);
-	kfree(console);
-	if(result)
-	{
- 		panic("Vfs_open:STDIN to filetable: %s\n",strerror(result));
-	}
-	
-	thread->t_filetable[0] = (struct fdesc *)kmalloc(sizeof(struct fdesc));	
-	strcpy(thread->t_filetable[0]->name,"STDIN");
-	thread->t_filetable[0]->offset = 0;
-	thread->t_filetable[0]->flag = 0;
-	thread->t_filetable[0]->ref_count = 0;
-	thread->t_filetable[0]->lk = lock_create(thread->t_filetable[0]->name);
-	thread->t_filetable[0]->vn = vn;
-
-	//STDOUT
-	console = kstrdup("con:");
-	result = vfs_open(console,O_RDONLY,0664,&vn);
-	if(result)
-	{
-		panic("Vfs_open:STDOUT to filetable: %s\n",strerror(result));
-	}
-	
-	thread->t_filetable[1] = (struct fdesc *)kmalloc(sizeof(struct fdesc));	
-	strcpy(thread->t_filetable[1]->name,"STDOUT");
-	thread->t_filetable[1]->offset = 0;
-	thread->t_filetable[1]->flag = 0;
-	thread->t_filetable[1]->ref_count = 0;
-	thread->t_filetable[1]->lk = lock_create(thread->t_filetable[1]->name);
-	thread->t_filetable[1]->vn = vn;
-	
-	//STDERR
-	console = kstrdup("con:");
-	result = vfs_open(console,O_WRONLY,0664,&vn);
-	if(result)
-	{
-		panic("Vfs_open:STDERR to filetable: %s\n",strerror(result));
-	}
-
-	thread->t_filetable[2] = (struct fdesc *)kmalloc(sizeof(struct fdesc));	
-	strcpy(thread->t_filetable[2]->name,"STDERR");
-	thread->t_filetable[2]->offset = 0;
-	thread->t_filetable[2]->flag = 0;
-	thread->t_filetable[2]->ref_count = 0;
-	thread->t_filetable[2]->lk = lock_create(thread->t_filetable[2]->name);
-	thread->t_filetable[2]->vn = vn;
-
-}
 
 //lseek....
 off_t sys__lseek(int currfiledesc, off_t offsetPos, int whence, off_t *returnval){

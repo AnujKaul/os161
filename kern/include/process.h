@@ -14,7 +14,10 @@ struct process
 	bool exitStatus; 
 };
 
+int process_initialize(void);
 int process_start(struct thread *);
+void setParentChildRelation(struct thread *);
+
 
 
  

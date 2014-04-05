@@ -127,6 +127,9 @@ int
 common_prog(int nargs, char **args)
 {
 	int result;
+	int returnVal;
+	int status;
+	struct thread * child;
 
 #if OPT_SYNCHPROBS
 	kprintf("Warning: this probably won't work with a "
@@ -136,12 +139,14 @@ common_prog(int nargs, char **args)
 	result = thread_fork(args[0] /* thread name */,
 			cmd_progthread /* thread function */,
 			args /* thread arg */, nargs /* thread arg */,
-			NULL);
+			&child);
 	if (result) {
 		kprintf("thread_fork failed: %s\n", strerror(result));
 		return result;
 	}
-
+	if(child != NULL){
+		result = sys__waitpid(child->processId,&status,0,&returnVal);
+	}
 	return 0;
 }
 
@@ -450,6 +455,7 @@ static const char *testmenu[] = {
 	"[sy2] Lock test             (1)     ",
 	"[sy3] CV test               (1)     ",
 	"[sy5] CV test 2             (1)     ",
+	"[rwtest] RWTest             (1)     ",
 	"[sp1] Whalematching Driver  (1)     ",
 	"[sp2] Stoplight Driver      (1)     ",
 	"[fs1] Filesystem test               ",
@@ -547,6 +553,7 @@ static struct {
 	{ "sy2",	locktest },
 	{ "sy3",	cvtest },
 	{ "sy5",	cvtest2 },
+	{"rwtest",rwtest},
 	
 #if OPT_SYNCHPROBS
   /* synchronization problem tests */

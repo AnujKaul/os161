@@ -48,6 +48,7 @@
 #include <syscall.h>
 #include <test.h>
 #include <version.h>
+#include <process.h>
 #include "autoconf.h"  // for pseudoconfig
 
 
@@ -94,7 +95,7 @@ boot(void)
 	 * anything at all. You can make it larger though (it's in
 	 * dev/generic/console.c).
 	 */
-
+	
 	kprintf("\n");
 	kprintf("OS/161 base system version %s\n", BASE_VERSION);
 	kprintf("%s", harvard_copyright);
@@ -106,6 +107,7 @@ boot(void)
 
 	/* Early initialization. */
 	ram_bootstrap();
+
 	thread_bootstrap();
 	hardclock_bootstrap();
 	vfs_bootstrap();

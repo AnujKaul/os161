@@ -319,9 +319,9 @@ cv_signal(struct cv *cv, struct lock *lock)
 
 	//	    KASSERT(curthread->t_in_interrupt == false);  //un comment if necessary.. not req
 
-	if(!lock_do_i_hold(lock)) {
-		lock_acquire(lock);
-	}
+	//if(!lock_do_i_hold(lock)) {
+	//	lock_acquire(lock);
+	//}
 	wchan_wakeone(cv->cv_wchan);
 	//(void)cv;    // suppress warning until code gets written
 	//(void)lock;  // suppress warning until code gets written

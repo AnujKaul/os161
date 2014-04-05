@@ -55,6 +55,7 @@
 #include "opt-defaultscheduler.h"
 
 
+
 /* Magic number used as a guard value on kernel thread stacks. */
 #define THREAD_STACK_MAGIC 0xbaadf00d
 
@@ -251,7 +252,9 @@ cpu_create(unsigned hardware_number)
 	c->c_curthread->t_cpu = c;
 
 	cpu_machdep_init(c);
-
+	
+//Added by Aditya Singla: to initialize the process table: table for each cpu
+	
 	return c;
 }
 
@@ -518,6 +521,7 @@ thread_fork(const char *name,
 	    struct thread **ret)
 {
 	struct thread *newthread;
+		int i;
 
 	newthread = thread_create(name);
 	if (newthread == NULL) {
@@ -538,6 +542,27 @@ thread_fork(const char *name,
 
 	/* Thread subsystem fields */
 	newthread->t_cpu = curthread->t_cpu;
+
+	/* copy file table and process entries - Aditya Singla*/
+
+	for (i=0;i<256;i++)
+	{
+		if(curthread->t_filetable[i] != NULL)
+		{
+			curthread->t_filetable[i]->ref_count++;
+			newthread->t_filetable[i] = curthread->t_filetable[i];
+		}
+	}
+	
+	if (process_start(newthread) != 0)
+	{
+		
+		//thread_exit(child);
+		
+		return ENOMEM;
+	}
+
+	setParentChildRelation(newthread);
 
 	/* VM fields */
 	/* do not clone address space -- let caller decide on that */

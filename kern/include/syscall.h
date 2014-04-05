@@ -77,4 +77,12 @@ int sys__getpid(int *);
 
 int sys__waitpid(int,int *,int, int *);
 
+int sys__fork(struct trapframe *,int *);
+
+void sys___exit(int);
+
+int sys__execv(const char *, char **, int *);
+
+
+
 #endif /* _SYSCALL_H_ */
