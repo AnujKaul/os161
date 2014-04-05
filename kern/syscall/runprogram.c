@@ -79,7 +79,7 @@ runprogram(char *progname, char **args,long nargs)
 		return ENOENT;
 	    }
 
-	if(strcmp("testbin/argtest",progname) == 0)
+	if(strcmp("/testbin/argtest",progname) == 0)
 	{
     	   /*Phreak out now ... time to play with the arguments
 	     *
