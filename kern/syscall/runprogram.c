@@ -48,6 +48,7 @@
 #include <kern/seek.h>
 #include <stat.h> 
 #include <fdesc.h>
+#include <copyinout.h>
 
 /*
  * Load program "progname" and start running it in usermode.
@@ -56,12 +57,152 @@
  * Calls vfs_open on progname and thus may destroy it.
  */
 int
-runprogram(char *progname)
+runprogram(char *progname, char **args,long nargs)
 {
 	struct vnode *v;
-	vaddr_t entrypoint, stackptr;
+	vaddr_t entrypoint, stackptr, stckptr;
 	int result;
+	int i = 0;
+	int stringbytes=0;
+	int membytes[256];
+	int numofargs = 0;
+	int stacksize = 0;
+	int reserror = 0;
 
+	struct vnode *ve;
+	vaddr_t enterexecutable;
+	
+	 
+	
+	/*Get hold of the file name and validate that stupid thing!!!*/
+	    if(progname == NULL){
+		return ENOENT;
+	    }
+
+	if(strcmp("testbin/argtest",progname) == 0)
+	{
+    	   /*Phreak out now ... time to play with the arguments
+	     *
+	     *
+	     */
+	    if(args != NULL){
+		i=0;
+	
+		while((i + 1) < nargs)
+		{
+		        kprintf("%s\n" ,args[i + 1]);
+		        kprintf("%d\n" ,strlen(args[i + 1]));
+		        if(((strlen(args[i + 1])+1)%4 ) == 0){
+		            membytes[i]  =  ((strlen(args[i + 1])+1)/4 ) ;        //gather info for aligned string space
+		        }
+		        else{
+		            membytes[i]  =  ((strlen(args[i + 1])+1)/4 ) +1 ;
+		        }
+
+		        i++;
+		
+		}
+		numofargs = i;
+
+		
+
+		for(i=0; i<numofargs; i++){
+		
+		        stringbytes += membytes[i];
+		}
+
+		stacksize = (stringbytes+numofargs+1);
+		
+	    }
+
+	    /* try and open the program name given to load in execv */
+		reserror = vfs_open(progname, O_RDONLY,0,&ve);
+		if(reserror)
+		{
+		   return reserror;
+		}
+
+	    /*
+	     * Lets start exploiting dumbVM
+	     * and its functionalities...
+	     */
+	    /*destroy the current address space of the thread*/
+		if(curthread->t_addrspace)
+		{
+		    as_destroy(curthread->t_addrspace);
+		    curthread->t_addrspace = NULL;
+		}
+
+		if(curthread->t_addrspace != NULL){
+		    kprintf("dude destroyer failed!!");
+		    return -1;
+		}
+
+
+		/* Create new virtual address space */
+		curthread->t_addrspace = as_create();
+		if(curthread->t_addrspace == NULL)
+		{
+		    vfs_close(ve);
+		    return reserror;
+		}
+
+		/* Activate the address space */
+		as_activate(curthread->t_addrspace);
+
+		/* Load the ELF file*/
+		reserror = load_elf(ve, &enterexecutable);
+		if (reserror)
+		{
+		    vfs_close(ve);
+		    return reserror;
+		}
+		/* file close... */
+		vfs_close(ve);
+
+		/* Define the user stack in the address space */
+		reserror = as_define_stack(curthread->t_addrspace, &stckptr);
+		if (reserror) {
+		    return reserror;
+		}
+
+		if(args != NULL){
+
+		    vaddr_t intermediateAddrVal[numofargs + 1];
+		    intermediateAddrVal[numofargs] = 0;
+		    //copying the strings...into the user stack!!
+		    for( i = numofargs - 1  ; i >=0 ; i-- ){
+		    	stckptr = stckptr - (sizeof(vaddr_t) * membytes[i]);
+			reserror = copyout((char *)args[i + 1], (userptr_t)stckptr, (sizeof(vaddr_t) * membytes[i]));
+			if(reserror)
+			{
+			    return reserror;
+			}		
+			intermediateAddrVal[i] = stckptr;
+		     }
+		    
+		    //copying addresses ... into user stack!! 
+		    for( i = numofargs ; i >= 0 ; i-- ){
+		    	stckptr = stckptr - sizeof(vaddr_t);
+			reserror = copyout(&intermediateAddrVal[i], (userptr_t)stckptr, sizeof(vaddr_t));
+			if(reserror)
+			{
+			    return reserror;
+			}		
+		     }
+		}
+
+
+		/* Warp to user mode */
+		enter_new_process(numofargs, (userptr_t)stckptr, stckptr, enterexecutable);
+		//md_usermode(nargs,(userptr_t)stckptr, stckptr,enterexecutable);
+		/* enter_new_process does not return. */
+		panic("enter_new_process returned\n");
+		return EINVAL;
+	}
+	else
+	{
+	
 	/* Open the file. */
 	result = vfs_open(progname, O_RDONLY, 0, &v);
 	if (result) {
@@ -104,7 +245,7 @@ runprogram(char *progname)
 	/* Warp to user mode. */
 	enter_new_process(0 /*argc*/, NULL /*userspace addr of argv*/,
 			  stackptr, entrypoint);
-	
+	}
 	/* enter_new_process does not return. */
 	panic("enter_new_process returned\n");
 	return EINVAL;

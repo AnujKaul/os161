@@ -90,6 +90,7 @@ int semtest(int, char **);
 int locktest(int, char **);
 int cvtest(int, char **);
 int cvtest2(int, char **);
+int rwtest(int, char **);
 
 /* filesystem tests */
 int fstest(int, char **);
@@ -105,7 +106,7 @@ int mallocstress(int, char **);
 int nettest(int, char **);
 
 /* Routine for running a user-level program. */
-int runprogram(char *progname);
+int runprogram(char *progname, char ** args, long nargs);
 
 /* Kernel menu system. */
 void menu(char *argstr);

@@ -276,6 +276,7 @@ int sys__execv(const char *program, char **args, int *returnval){
     }
 
     loadfile = (char *)kmalloc(256); // limiting file size to 256 characters.
+    
     reserror = copyinstr((const_userptr_t)program, loadfile, 256, &actualsize);
 	kprintf("file name :%s\n" ,loadfile);
     if(reserror != 0){
