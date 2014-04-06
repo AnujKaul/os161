@@ -76,9 +76,11 @@ runprogram(char *progname, char **args,long nargs)
 	
 	/*Get hold of the file name and validate that stupid thing!!!*/
 	    if(progname == NULL){
-		return ENOENT;
+		return EINVAL;
 	    }
-
+	if(strlen(progname) == 0){
+		return EINVAL;
+	    }
 	if(strcmp("/testbin/argtest",progname) == 0)
 	{
     	   /*Phreak out now ... time to play with the arguments
@@ -189,7 +191,7 @@ runprogram(char *progname, char **args,long nargs)
 			}		
 		     }
 		}
-
+		initialize_file_table(curthread);
 
 		/* Warp to user mode */
 		enter_new_process(numofargs, (userptr_t)stckptr, stckptr, enterexecutable);
