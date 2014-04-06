@@ -97,7 +97,7 @@ cmd_progthread(void *ptr, unsigned long nargs)
 	
 	KASSERT(strlen(args[0]) < sizeof(progname));
 
-	if (strcmp("testbin/argtest",args[0])==0)
+	if (strcmp("/testbin/argtest",args[0])==0)
 	{
 		result = runprogram(args[0],args,nargs);	
 	}
