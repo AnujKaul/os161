@@ -90,8 +90,6 @@ runprogram(char *progname, char **args,long nargs)
 	
 		while((i + 1) < nargs)
 		{
-		        kprintf("%s\n" ,args[i + 1]);
-		        kprintf("%d\n" ,strlen(args[i + 1]));
 		        if(((strlen(args[i + 1])+1)%4 ) == 0){
 		            membytes[i]  =  ((strlen(args[i + 1])+1)/4 ) ;        //gather info for aligned string space
 		        }

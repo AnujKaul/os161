@@ -278,7 +278,7 @@ int sys__execv(const char *program, char **args, int *returnval){
     loadfile = (char *)kmalloc(256); // limiting file size to 256 characters.
     
     reserror = copyinstr((const_userptr_t)program, loadfile, 256, &actualsize);
-	kprintf("file name :%s\n" ,loadfile);
+	
     if(reserror != 0){
 
         return (*returnval = reserror);
@@ -305,8 +305,6 @@ int sys__execv(const char *program, char **args, int *returnval){
 	
         while(args[i + 1] != NULL)
         {
-                kprintf("%s\n" ,args[i]);
-                kprintf("%d\n" ,strlen(args[i]));
                 if(((strlen(args[i+1])+1)%4 ) == 0){
                     membytes[i]  =  ((strlen(args[i + 1])+1)/4 ) ;        //gather info for aligned string space
                 }
@@ -319,15 +317,14 @@ int sys__execv(const char *program, char **args, int *returnval){
         }
         numofargs = i;
 
-        kprintf("\n the number of arguments  is >> %d", numofargs);
-
+        
         for(i=0; i<numofargs; i++){
-                kprintf("\n bytes size needed >> %d", membytes[i]);
+        
                 stringbytes += membytes[i];
         }
 
         stacksize = (stringbytes+numofargs+1);
-        kprintf("\n The number of arguments  is >> %d", stacksize);
+        
 
 
         kbuf = (char **)kmalloc(sizeof(char *) * numofargs);
