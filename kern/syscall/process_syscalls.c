@@ -307,7 +307,7 @@ int sys__execv(const char *program, char **args, int *returnval){
         {
                 kprintf("%s\n" ,args[i]);
                 kprintf("%d\n" ,strlen(args[i]));
-                if(((strlen(args[i])+1)%4 ) == 0){
+                if(((strlen(args[i+1])+1)%4 ) == 0){
                     membytes[i]  =  ((strlen(args[i + 1])+1)/4 ) ;        //gather info for aligned string space
                 }
                 else{
