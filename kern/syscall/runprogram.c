@@ -59,9 +59,10 @@
 int
 runprogram(char *progname, char **args,long nargs)
 {
-	struct vnode *v;
-	vaddr_t entrypoint, stackptr, stckptr;
-	int result;
+	//struct vnode *v;
+	vaddr_t stckptr;
+//	entrypoint, stackptr, stckptr;
+	//int result;
 	int i = 0;
 	int stringbytes=0;
 	int membytes[256];
@@ -81,8 +82,8 @@ runprogram(char *progname, char **args,long nargs)
 	if(strlen(progname) == 0){
 		return EINVAL;
 	    }
-	if(strcmp("/testbin/argtest",progname) == 0)
-	{
+	//if(strcmp("/testbin/argtest",progname) == 0)
+	//{
     	   /*Phreak out now ... time to play with the arguments
 	     *
 	     *
@@ -199,56 +200,7 @@ runprogram(char *progname, char **args,long nargs)
 		/* enter_new_process does not return. */
 		panic("enter_new_process returned\n");
 		return EINVAL;
-	}
-	else
-	{
 	
-	/* Open the file. */
-	result = vfs_open(progname, O_RDONLY, 0, &v);
-	if (result) {
-		return result;
-	}
-
-	/* We should be a new thread. */
-	KASSERT(curthread->t_addrspace == NULL);
-
-	/* Create a new address space. */
-	curthread->t_addrspace = as_create();
-	if (curthread->t_addrspace==NULL) {
-		vfs_close(v);
-		return ENOMEM;
-	}
-
-	/* Activate it. */
-	as_activate(curthread->t_addrspace);
-
-	/* Load the executable. */
-	result = load_elf(v, &entrypoint);
-	if (result) {
-		/* thread_exit destroys curthread->t_addrspace */
-		vfs_close(v);
-		return result;
-	}
-
-	/* Done with the file now. */
-	vfs_close(v);
-
-	/* Define the user stack in the address space */
-	result = as_define_stack(curthread->t_addrspace, &stackptr);
-	if (result) {
-		/* thread_exit destroys curthread->t_addrspace */
-		return result;
-	}
-	
-	initialize_file_table(curthread);
-
-	/* Warp to user mode. */
-	enter_new_process(0 /*argc*/, NULL /*userspace addr of argv*/,
-			  stackptr, entrypoint);
-	}
-	/* enter_new_process does not return. */
-	panic("enter_new_process returned\n");
-	return EINVAL;
 }
 
 
