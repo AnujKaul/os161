@@ -90,13 +90,13 @@ runprogram(char *progname, char **args,long nargs)
 	    if(args != NULL){
 		i=0;
 	
-		while((i + 1) < nargs)
+		while((i) < nargs)
 		{
-		        if(((strlen(args[i + 1])+1)%4 ) == 0){
-		            membytes[i]  =  ((strlen(args[i + 1])+1)/4 ) ;        //gather info for aligned string space
+		        if(((strlen(args[i])+1)%4 ) == 0){
+		            membytes[i]  =  ((strlen(args[i])+1)/4 ) ;        //gather info for aligned string space
 		        }
 		        else{
-		            membytes[i]  =  ((strlen(args[i + 1])+1)/4 ) +1 ;
+		            membytes[i]  =  ((strlen(args[i])+1)/4 ) +1 ;
 		        }
 
 		        i++;
@@ -173,7 +173,7 @@ runprogram(char *progname, char **args,long nargs)
 		    //copying the strings...into the user stack!!
 		    for( i = numofargs - 1  ; i >=0 ; i-- ){
 		    	stckptr = stckptr - (sizeof(vaddr_t) * membytes[i]);
-			reserror = copyout((char *)args[i + 1], (userptr_t)stckptr, (sizeof(vaddr_t) * membytes[i]));
+			reserror = copyout((char *)args[i], (userptr_t)stckptr, (sizeof(vaddr_t) * membytes[i]));
 			if(reserror)
 			{
 			    return reserror;

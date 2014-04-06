@@ -272,7 +272,7 @@ int sys__execv(const char *program, char **args, int *returnval){
     
     /*Get hold of the file name and validate that stupid thing!!!*/
     if(program == NULL){
-        return ENOENT;
+        return EINVAL;
     }
 
     loadfile = (char *)kmalloc(256); // limiting file size to 256 characters.
@@ -291,6 +291,10 @@ int sys__execv(const char *program, char **args, int *returnval){
         return EINVAL;
 
     }
+    if(args[1] == NULL)
+    {
+	return EINVAL;
+    }
 
 	
     /*Stop messing with the file name now!*/
@@ -300,16 +304,17 @@ int sys__execv(const char *program, char **args, int *returnval){
      *
      *
      */
+
     if(args != NULL){
 	i=0;
 	
-        while(args[i + 1] != NULL)
+        while(args[i] != NULL)
         {
-                if(((strlen(args[i+1])+1)%4 ) == 0){
-                    membytes[i]  =  ((strlen(args[i + 1])+1)/4 ) ;        //gather info for aligned string space
+                if(((strlen(args[i])+1)%4 ) == 0){
+                    membytes[i]  =  ((strlen(args[i])+1)/4 ) ;        //gather info for aligned string space
                 }
                 else{
-                    membytes[i]  =  ((strlen(args[i + 1])+1)/4 ) +1 ;
+                    membytes[i]  =  ((strlen(args[i])+1)/4 ) +1 ;
                 }
 
                 i++;
@@ -334,7 +339,7 @@ int sys__execv(const char *program, char **args, int *returnval){
     
 	    // hoping this sets padded character strings
 	    kbuf[i] = (char *)kmalloc(sizeof(char) * membytes[i] * 4);
-            reserror = copyinstr((const_userptr_t)args[i + 1], (char *)kbuf[i], (sizeof(char ) * membytes[i] * 4), &actualsize);
+            reserror = copyinstr((const_userptr_t)args[i], (char *)kbuf[i], (sizeof(char ) * membytes[i] * 4), &actualsize);
             if(reserror !=0)
             {
                 kfree(kbuf);
