@@ -34,24 +34,11 @@ void setParentChildRelation(struct thread * childThread)
 
 }
 
-int process_initialize(void)
-{ 
-	int i;
-	for(i=0;i<256;i++)
-	{
-		process_table[i] = NULL;
-	}
-	
-
-	return 0;
-
-}
-
 int process_start(struct thread * thread)
 {
 	int i;
 	int id;
-	//int intVal;
+
 	struct process *process;
 	process = (struct process *)kmalloc(sizeof(struct process));
 		
@@ -67,7 +54,7 @@ int process_start(struct thread * thread)
 			break;
 		}
 	}
-	//intVal = splhigh();	
+	
 	process->parentId = 0;
 	process->code = 0;
 	process->exitStatus=0;
@@ -86,7 +73,7 @@ int process_start(struct thread * thread)
 	process->myThread = thread;
 	process_table[id] = process;
 	thread->processId = id;
-	//splx(intVal);
+	
 	return 0;
 
 }
@@ -103,29 +90,13 @@ int sys__getpid(int * ret)
 	return -1;
 }
 
-int sys__waitpid(pid_t pid, int * status, int option, int * ret)
+int sys___waitpid(pid_t pid, int * status, int option, int * ret)
 {
 	if(option != 0)
 	{
-		kprintf("waitpid1\n");
-		
+				
 		return EINVAL;
 	}
-	
-	if(process_table[pid] == NULL)
-	{
-		kprintf("waitpid2\n");
-
-		return ESRCH;
-	}
-	
-	if(process_table[pid]->parentId != curthread->processId)
-	{
-		kprintf("waitpid3\n");
-
-		return EFAULT;
-	}
-	
 	
 	lock_acquire(process_table[pid]->lk);
 	if(process_table[pid]->exitStatus == 0)
@@ -142,13 +113,69 @@ int sys__waitpid(pid_t pid, int * status, int option, int * ret)
 
 	return 0;
 
+
+}
+
+int sys__waitpid(pid_t pid, int * status, int option, int * ret)
+{
+	
+	int kstatus;
+	int result;
+	result = copyin((userptr_t)status,&kstatus,sizeof(status));
+	if(result !=0)
+	{
+		return EFAULT;
+	}	
+	if(option != 0)
+	{
+				
+		return EINVAL;
+	}
+	
+	if(process_table[pid] == NULL)
+	{
+		
+		return ESRCH;
+	}
+	
+	if(process_table[pid]->parentId != curthread->processId)
+	{
+		
+		return EFAULT;
+	}
+	
+	if(status == NULL)
+	{
+		return EFAULT;
+	}
+	
+	lock_acquire(process_table[pid]->lk);
+	if(process_table[pid]->exitStatus == 0)
+	{
+		cv_wait(process_table[pid]->exitcv,process_table[pid]->lk);	
+	}
+	*ret = pid;
+	kstatus = process_table[pid]->code;
+	result = copyout(&kstatus,(userptr_t)status,sizeof(kstatus));
+	if(result !=0)
+	{
+		return EFAULT;
+	}
+	lock_release(process_table[pid]->lk);
+	cv_destroy(process_table[pid]->exitcv);
+	lock_destroy(process_table[pid]->lk);
+	
+	kfree(process_table[pid]);
+
+	return 0;
+
  }
 
 
 void child_fork_start(void * data1, unsigned long data2)
 {
 	
-	//kprintf("********************************i am here*********************************\n");
+
 	struct trapframe tf;	
 	struct addrspace * child_as = (struct addrspace *)data2;
 	struct trapframe * child_tf = (struct trapframe *)data1;
@@ -177,14 +204,14 @@ int sys__fork(struct trapframe * tf,int * ret)
  	
 	child_tf = (struct trapframe *)kmalloc(sizeof(struct trapframe));
 	struct thread * child;
-	//child_as = (struct addrspace *)malloc(sizeof(struct addrspace));
+	
 	
 		
 	*child_tf = *tf;
 	result = as_copy(curthread->t_addrspace,&child_as);
 	if(result != 0)
 	{
-		//kprintf("**********i reached here again***************\n");
+		
 		kfree(child_tf);
 
 		return ENOMEM;
@@ -193,6 +220,7 @@ int sys__fork(struct trapframe * tf,int * ret)
 	
 	intVal = splhigh();	
 	result = thread_fork("child_thread",child_fork, (struct trapframe *)child_tf, (unsigned long)child_as,&child);
+	
 	if(result !=0)
 	{
 		splx(intVal);
@@ -203,11 +231,8 @@ int sys__fork(struct trapframe * tf,int * ret)
 		
  	
 	
-	//kprintf("***********%d***********\n",child->processId);
-	//kprintf("***********%d***********\n",curthread->processId);
-	
 	*ret = child->processId;
-	//kprintf("%d\n",*ret);
+
 	splx(intVal);
 
 	return 0;
@@ -228,8 +253,6 @@ void sys___exit(int exitcode)
 	}
 	if (parent == NULL)
 	{
-		//cv_destroy(child->exitcv);
-		//lock_destroy(child->lk);
 		kfree(process_table[curthread->processId]);	
 	}
 	else
@@ -242,8 +265,6 @@ void sys___exit(int exitcode)
 		}
 		else
 		{
-			//cv_destroy(child->exitcv);
-			//lock_destroy(child->lk);
 			kfree(process_table[curthread->processId]);	
 
 		}
@@ -262,6 +283,7 @@ int sys__execv(const char *program, char **args, int *returnval){
     int numofargs = 0;
     int stacksize = 0;
     char ** kbuf;
+    char * checkargs;
 
     char* loadfile;
     int reserror = 0;
@@ -304,6 +326,31 @@ int sys__execv(const char *program, char **args, int *returnval){
      *
      *
      */
+
+    if(args == NULL){
+	return EFAULT;
+    }	
+
+    //if(*args == NULL){
+	//return EFAULT;
+   // }
+
+    
+    
+     i = 0;
+    if(args[i] != NULL){	
+     checkargs = (char *)kmalloc(sizeof(char) * 256);	
+     reserror = copyin((userptr_t)args, (char *)checkargs, (sizeof(char ) * 256));
+     if(reserror)
+     {
+         kfree(loadfile);
+	*returnval = reserror;
+         return EFAULT;
+     }
+     kfree(checkargs); 
+     i++;
+   }
+
 
     if(args != NULL){
 	i=0;
@@ -349,30 +396,6 @@ int sys__execv(const char *program, char **args, int *returnval){
         }
     }
 
-    /*Work with an intermediate user stack we design .... FS i hope this works :-x */
-
-    /*vaddr_t intermediatestack[stacksize];
-    if(args != NULL){
-        //int intrmdtstckptr = 0;
-        //vaddr_t intermediatestack[numofargs + stringbytes];
-        int locinstack = numofargs + 1;
-        for( i = 0 ; i < numofargs ; i++ ){
-
-            reserror = copyoutstr((const char *)kbuf[i], (userptr_t)intermediatestack[locinstack], (sizeof(char)*membytes[i]*4), &actualsize);
-            if(reserror != 0)
-            {
-                kfree(kbuf);
-                kfree(loadfile);
-                return reserror;
-            }
-            intermediatestack[i] = locinstack;
-            locinstack = locinstack + membytes[i];
-        }
-        intermediatestack[numofargs] = (vaddr_t)NULL;
-    }
-*/
-    /*user stack intermediate representation done...*/
-    /*OK I hope this works.... update working status <BETA>*/
 
     /* try and open the program name given to load in execv */
         reserror = vfs_open(loadfile, O_RDONLY,0,&ve);
@@ -457,15 +480,6 @@ int sys__execv(const char *program, char **args, int *returnval){
 		}		
 	     }
 
-	    /*vaddr_t stckptrold = stckptr;
-            for (i = 0 ; i < numofargs ; i++){
-               	//memcpy((userptr_t)stckptr,  (vaddr_t *)(stckptrold + (kbuf[i] * sizeof(vaddr_t))), sizeof(vaddr_t)); 
-		//stckptr = (vaddr_t)(stckptrold + (intermediatestack[i] * sizeof(vaddr_t)));
-		stckptr++;
-            }
-	    stckptr = stckptrold;
-
-	    */
             kfree(loadfile);
         }
 

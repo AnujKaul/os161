@@ -59,10 +59,8 @@
 int
 runprogram(char *progname, char **args,long nargs)
 {
-	//struct vnode *v;
+
 	vaddr_t stckptr;
-//	entrypoint, stackptr, stckptr;
-	//int result;
 	int i = 0;
 	int stringbytes=0;
 	int membytes[256];
@@ -82,12 +80,7 @@ runprogram(char *progname, char **args,long nargs)
 	if(strlen(progname) == 0){
 		return EINVAL;
 	    }
-	//if(strcmp("/testbin/argtest",progname) == 0)
-	//{
-    	   /*Phreak out now ... time to play with the arguments
-	     *
-	     *
-	     */
+
 	    if(args != NULL){
 		i=0;
 	
@@ -196,69 +189,79 @@ runprogram(char *progname, char **args,long nargs)
 
 		/* Warp to user mode */
 		enter_new_process(numofargs, (userptr_t)stckptr, stckptr, enterexecutable);
-		//md_usermode(nargs,(userptr_t)stckptr, stckptr,enterexecutable);
-		/* enter_new_process does not return. */
 		panic("enter_new_process returned\n");
 		return EINVAL;
 	
 }
-
-
 
 void initialize_file_table(struct thread * thread)
 {
 	int result;
 	char * console = NULL;
 	struct vnode * vn;
-	console = kstrdup("con:");
-	//strcpy(devname,"con:");
-	
-	result = vfs_open(console,O_WRONLY,0664,&vn);
-	kfree(console);
-	if(result)
+	int i;
+	// loop for 3 console file descriptors
+	for(i=0;i<3;i++)
 	{
- 		panic("Vfs_open:STDIN to filetable: %s\n",strerror(result));
-	}
+		switch(i)
+		{	//STDIN
+			case 0:
+				console = kstrdup("con:");
+				result = vfs_open(console,O_WRONLY,0664,&vn);
+				kfree(console);
+				if(result)
+				{
+			 		panic("Vfs_open:STDIN to filetable: %s\n",strerror(result));	
+				}
 	
-	thread->t_filetable[0] = (struct fdesc *)kmalloc(sizeof(struct fdesc));	
-	strcpy(thread->t_filetable[0]->name,"STDIN");
-	thread->t_filetable[0]->offset = 0;
-	thread->t_filetable[0]->flag = 0;
-	thread->t_filetable[0]->ref_count = 0;
-	thread->t_filetable[0]->lk = lock_create(thread->t_filetable[0]->name);
-	thread->t_filetable[0]->vn = vn;
-
-	//STDOUT
-	console = kstrdup("con:");
-	result = vfs_open(console,O_RDONLY,0664,&vn);
-	if(result)
-	{
-		panic("Vfs_open:STDOUT to filetable: %s\n",strerror(result));
-	}
+				thread->t_filetable[i] = (struct fdesc *)kmalloc(sizeof(struct fdesc));	
+				strcpy(thread->t_filetable[i]->name,"STDIN");
+				break;
+			//STDOUT
+			case 1:
+				console = kstrdup("con:");
+				result = vfs_open(console,O_RDONLY,0664,&vn);
+				kfree(console);
+				if(result)
+				{
+			 		panic("Vfs_open:STDIN to filetable: %s\n",strerror(result));	
+				}
 	
-	thread->t_filetable[1] = (struct fdesc *)kmalloc(sizeof(struct fdesc));	
-	strcpy(thread->t_filetable[1]->name,"STDOUT");
-	thread->t_filetable[1]->offset = 0;
-	thread->t_filetable[1]->flag = 0;
-	thread->t_filetable[1]->ref_count = 0;
-	thread->t_filetable[1]->lk = lock_create(thread->t_filetable[1]->name);
-	thread->t_filetable[1]->vn = vn;
+				thread->t_filetable[i] = (struct fdesc *)kmalloc(sizeof(struct fdesc));	
+				strcpy(thread->t_filetable[i]->name,"STDOUT");
+				break;
+			//STDERR
+			case 2:
+				console = kstrdup("con:");
+				result = vfs_open(console,O_WRONLY,0664,&vn);
+				kfree(console);
+				if(result)
+				{
+			 		panic("Vfs_open:STDIN to filetable: %s\n",strerror(result));	
+				}
 	
-	//STDERR
-	console = kstrdup("con:");
-	result = vfs_open(console,O_WRONLY,0664,&vn);
-	if(result)
-	{
-		panic("Vfs_open:STDERR to filetable: %s\n",strerror(result));
-	}
-
-	thread->t_filetable[2] = (struct fdesc *)kmalloc(sizeof(struct fdesc));	
-	strcpy(thread->t_filetable[2]->name,"STDERR");
-	thread->t_filetable[2]->offset = 0;
-	thread->t_filetable[2]->flag = 0;
-	thread->t_filetable[2]->ref_count = 0;
-	thread->t_filetable[2]->lk = lock_create(thread->t_filetable[2]->name);
-	thread->t_filetable[2]->vn = vn;
+				thread->t_filetable[i] = (struct fdesc *)kmalloc(sizeof(struct fdesc));	
+				strcpy(thread->t_filetable[i]->name,"STDERR");
+				break;
+			default:
+				break;
+			
+		}
+		
+		if(i < 3)
+		{
+			if (thread->t_filetable[i] != NULL)
+			{
+				thread->t_filetable[i]->offset = 0;
+				thread->t_filetable[i]->flag = 0;
+				thread->t_filetable[i]->ref_count = 0;
+				thread->t_filetable[i]->lk = lock_create(thread->t_filetable[i]->name);
+				thread->t_filetable[i]->vn = vn;
+			}
+		}
+		
+	}	
+	
 
 }
 

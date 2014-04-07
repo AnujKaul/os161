@@ -77,6 +77,8 @@ int sys__getpid(int *);
 
 int sys__waitpid(int,int *,int, int *);
 
+int sys___waitpid(int,int *,int, int *);
+
 int sys__fork(struct trapframe *,int *);
 
 void sys___exit(int);

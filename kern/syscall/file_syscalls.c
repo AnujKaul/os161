@@ -28,20 +28,29 @@ int sys__open(char * filename,int flags, mode_t mode, int* ret)
 	char kfilename[MAX_FILENAME_SIZE];
 	size_t len;
 	int result;
-	//Copy filename to kernel space	
-	result = copyinstr((const_userptr_t)filename, kfilename, MAX_FILENAME_SIZE, &len);
-	if(result != 0)
-	{
-
-		return EFAULT;
-	}
+	int flagmode;
 	//Check if file name provided by user is null or not
 	if(kfilename == NULL)
 	{
 
 		return EFAULT;
 	}	
-	//initialize STDIN,STDOUT,STDERR - lazy loading
+	
+	//Copy filename to kernel space	
+	result = copyinstr((const_userptr_t)filename, kfilename, MAX_FILENAME_SIZE, &len);
+	if(result != 0)
+	{
+		return EFAULT;
+	}
+
+	
+	flagmode = flags & 64;
+	if(flagmode)
+	{
+		return EINVAL;
+	}
+	
+	
 	//create fdesc structure
 	struct fdesc * file;
 	//allocate memory - should be free if and error occurs
@@ -75,7 +84,7 @@ int sys__open(char * filename,int flags, mode_t mode, int* ret)
 int sys__close(int fd, int *ret)
 {
 	
-	if(fd<3 || fd>255)
+	if(fd>=255 || fd <0)
 	{
 
 		return EBADF;
@@ -87,6 +96,7 @@ int sys__close(int fd, int *ret)
 		if(curthread->t_filetable[fd]->ref_count == 0)
 		{
 			vfs_close(curthread->t_filetable[fd]->vn);
+			//lock_destroy(curthread->t_filetable[fd]->lk);
 			kfree(curthread->t_filetable[fd]);
 			
 		}
@@ -106,19 +116,18 @@ int sys__write(int fd,void * buff,size_t nbytes, int *ret)
 	kbuff = kmalloc(nbytes);
 	int result;	
 	result = copyin((const_userptr_t)buff, kbuff, nbytes);
-	if(buff == NULL)
-	{
-		kfree(buff);
-
-		return EFAULT;
-	}
 	if(result !=0)
 	{
 		kfree(kbuff);
 
-		return result;
+		return EFAULT;
 	}
-	
+	if(kbuff == NULL)
+	{
+		kfree(kbuff);
+
+		return EFAULT;
+	}
 	struct fdesc * file;
 	int err;
 	if(fd > 255 || fd < 0)
@@ -150,7 +159,7 @@ int sys__write(int fd,void * buff,size_t nbytes, int *ret)
 	if((err = VOP_WRITE(file->vn,&u)) != 0)
 	{
 		kfree(kbuff);
-
+		lock_release(file->lk);
 		return EBADF;
 	}
 	kfree(kbuff);
@@ -162,6 +171,7 @@ int sys__write(int fd,void * buff,size_t nbytes, int *ret)
 
 int sys__read(int fd,void * buff,size_t nbytes, int *ret)
 {
+	
 	void * kbuff;
 	int result;
 	kbuff = kmalloc(nbytes);
@@ -231,20 +241,30 @@ off_t sys__lseek(int currfiledesc, off_t offsetPos, int whence, off_t *returnval
     off_t retoffset;
     int errcode;
  
+    if(currfiledesc < 3 || currfiledesc > 256 || &currfiledesc == NULL){
+        
+        return EBADF;
+    }
+
+    
+    if(offsetPos < 0)
+    {
+	return EINVAL;
+    }
 
     // current file desc for the current thread shouldnt be null
     if( curthread->t_filetable[currfiledesc] == NULL){
-        *returnval = -1;
+        
         return EBADF;
     }
  
- 
+    if((whence  >> 2) != 0)
+    {
+	return EINVAL;
+    }
     //check for illegal positions of the filehandle not be zero
     // such a file cant exist..coz our FT has max 256;
-    if(currfiledesc < 0 || currfiledesc > 256){
-        *returnval = -1;
-        return EBADF;
-    }
+    
  
  
     struct fdesc* curFile = curthread->t_filetable[currfiledesc];
@@ -314,29 +334,33 @@ off_t sys__lseek(int currfiledesc, off_t offsetPos, int whence, off_t *returnval
 // __getCWD
 int sys___getcwd(char *buf, size_t buflen, int *returnval){
  
+    if(buf == NULL)
+    {
+		return EFAULT;
+    }
     int errcode;
     // ok we have to use vfs_getcwd
     //so we need a uio..
     struct uio cwdu;
     struct iovec cwdiov;
-    char * cwdname = (char *)kmalloc(buflen);
+    void * cwdname = (void *)kmalloc(buflen);
     //struct fdesc curFle = curthread->t_filetable;
  
     // now initializing uio object..
-    cwdiov.iov_ubase = (userptr_t)cwdname;
-    cwdiov.iov_len = buflen-1;
+    cwdiov.iov_ubase = cwdname;
+    cwdiov.iov_len = buflen;
     cwdu.uio_iov = &cwdiov;
     cwdu.uio_iovcnt = 1;
     cwdu.uio_offset = 0;
-    cwdu.uio_resid = buflen-1;
-    cwdu.uio_rw = UIO_SYSSPACE;
+    cwdu.uio_resid = buflen;
+    cwdu.uio_rw = UIO_READ;
     cwdu.uio_segflg = UIO_READ;
-    cwdu.uio_space = NULL;
+    cwdu.uio_space = curthread->t_addrspace;
  
     errcode = vfs_getcwd(&cwdu);
  
-    if(errcode){
-        return errcode;
+    if(errcode != 0){
+        return EFAULT;
     }
  
  
@@ -344,46 +368,73 @@ int sys___getcwd(char *buf, size_t buflen, int *returnval){
     //we need to add termination to file name it should be buflen -1 ^
  
  
-    cwdname[(buflen-1)-cwdu.uio_resid] = 0; //set 0 at the position after the input/opt Remaining amt of data
+    //cwdname[(buflen-1)-cwdu.uio_resid] = 0; //set 0 at the position after the input/opt Remaining amt of data
     size_t actualsize;
     copyoutstr((const char *)cwdname,(userptr_t)buf,buflen,&actualsize);
     kfree(cwdname);
     *returnval = buflen - cwdu.uio_resid;
     return 0;
-}
+} 
  
 //dup2
 int sys__dup2(int currfd, int dupfd, int* returnval){
-    if(currfd < 0 || dupfd < 0 || currfd > 256 || dupfd >= 256){
-        *returnval = -1;
-        return EBADF;
-    }
-    lock_acquire(curthread->t_filetable[currfd]->lk);
-    struct fdesc * curFile = curthread->t_filetable[currfd];
-    struct fdesc * dupFile = curthread->t_filetable[dupfd];
-    if(dupFile != NULL){
-       if(sys__close(currfd,returnval))
-       return EBADF;
-    }
- 
-        dupFile->flag = curFile->flag;
-        dupFile->offset = curFile->offset;
-        dupFile->vn = curFile->vn;
+
+
+
+    	if(currfd < 0 || dupfd < 0 || currfd >= 127 || dupfd >= 127){
+
+        	return EBADF;
+    	}
+
+	
+	if(curthread->t_filetable[currfd] == NULL)
+	{
+		return EBADF;
+	}
+	if(currfd == dupfd)
+	{
+		*returnval = dupfd;
+		return 0;
+	}
+
+	struct fdesc * newDesc;
+    	lock_acquire(curthread->t_filetable[currfd]->lk);
+    	struct fdesc * curFile = curthread->t_filetable[currfd];
+   	struct fdesc * dupFile = curthread->t_filetable[dupfd];
+        if(dupFile != NULL){
+	     if(sys__close(dupfd,returnval))
+	     return EBADF;
+	}
+	newDesc = (struct fdesc *)kmalloc(sizeof(struct fdesc));
+ 	newDesc->lk = lock_create("dupfile");
+        newDesc->flag = curFile->flag;
+        newDesc->offset = curFile->offset;
+        newDesc->vn = curFile->vn;
+	curthread->t_filetable[dupfd] = newDesc;
         *returnval = dupfd;
-    lock_release(curthread->t_filetable[currfd]->lk);
-    return 0;
+    	lock_release(curthread->t_filetable[currfd]->lk);
+    	return 0;
 }
  
 //chdir
 int sys__chdir(char *pathname, int *returnval)
 {
+    int result;
+    if(pathname == NULL)
+    {
+	return EFAULT;
+    }
+	
     char *name = (char*)kmalloc(sizeof(char)*256);
     size_t len;
-    copyinstr((userptr_t)pathname, name, 256, &len);
+    result = copyinstr((userptr_t)pathname, name, 256, &len);
+    if(result != 0)
+    {
+	return EFAULT;
+    } 
     int errcode = vfs_chdir(name);
     if(errcode)
     {
-        *returnval = -1;
         return errcode;
     }
     *returnval = 0;

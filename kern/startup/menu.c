@@ -94,6 +94,7 @@ cmd_progthread(void *ptr, unsigned long nargs)
 	
 
 	/* Hope we fit. */
+
 	
 	KASSERT(strlen(args[0]) < sizeof(progname));
 
@@ -156,7 +157,7 @@ common_prog(int nargs, char **args)
 		return result;
 	}
 	if(child != NULL){
-		result = sys__waitpid(child->processId,&status,0,&returnVal);
+		result = sys___waitpid(child->processId,&status,0,&returnVal);
 	}
 	return 0;
 }

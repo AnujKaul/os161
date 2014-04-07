@@ -82,7 +82,7 @@ syscall(struct trapframe *tf)
 	int callno;
 	int32_t retval;
 	int err;
-	off_t pos = 0;
+	int64_t pos = 0;
 	int whence;
 	off_t ret;
 
@@ -135,10 +135,9 @@ syscall(struct trapframe *tf)
                 if ((err = copyin((const_userptr_t)(tf->tf_sp+16), &whence, sizeof(whence))) != 0) {
                      break;
                 }
- 
-                
+		                
                 err=sys__lseek((int)tf->tf_a0,pos,whence,&ret);
-                if (!err) {
+                if (err != 0) {
                     retval = ret>>32;
                     tf->tf_v1 = ret;
                 }
