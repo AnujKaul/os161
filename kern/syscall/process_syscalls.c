@@ -43,6 +43,7 @@ int process_start(struct thread * thread)
 	process = (struct process *)kmalloc(sizeof(struct process));
 		
 	if(process == NULL){
+		kfree(process);
 		return -1;	
 	}
 	
@@ -302,19 +303,22 @@ int sys__execv(const char *program, char **args, int *returnval){
     reserror = copyinstr((const_userptr_t)program, loadfile, 256, &actualsize);
 	
     if(reserror != 0){
-
+	kfree(loadfile);
         return (*returnval = reserror);
     }
 
     if(loadfile == NULL){
+		kfree(loadfile);
         return EINVAL;
     }
     if(strlen(loadfile) == 0){
+	kfree(loadfile);
         return EINVAL;
 
     }
     if(args[1] == NULL)
     {
+	kfree(loadfile);
 	return EINVAL;
     }
 
@@ -328,6 +332,7 @@ int sys__execv(const char *program, char **args, int *returnval){
      */
 
     if(args == NULL){
+	kfree(loadfile);
 	return EFAULT;
     }	
 
@@ -401,6 +406,7 @@ int sys__execv(const char *program, char **args, int *returnval){
         reserror = vfs_open(loadfile, O_RDONLY,0,&ve);
         if(reserror)
         {
+                kfree(kbuf);
             kfree(loadfile);
             return reserror;
         }
@@ -417,7 +423,9 @@ int sys__execv(const char *program, char **args, int *returnval){
         }
 
         if(curthread->t_addrspace != NULL){
-            kprintf("dude destroyer failed!!");
+                kfree(kbuf);  
+            kfree(loadfile);      
+	    kprintf("dude destroyer failed!!");
             return -1;
         }
 
@@ -426,6 +434,7 @@ int sys__execv(const char *program, char **args, int *returnval){
         curthread->t_addrspace = as_create();
         if(curthread->t_addrspace == NULL)
         {
+	                kfree(kbuf);
             vfs_close(ve);
             kfree(loadfile);
             return reserror;
@@ -438,6 +447,7 @@ int sys__execv(const char *program, char **args, int *returnval){
         reserror = load_elf(ve, &enterexecutable);
         if (reserror)
         {
+                kfree(kbuf);
             vfs_close(ve);
             kfree(loadfile);
             return reserror;
@@ -448,6 +458,7 @@ int sys__execv(const char *program, char **args, int *returnval){
         /* Define the user stack in the address space */
         reserror = as_define_stack(curthread->t_addrspace, &stckptr);
         if (reserror) {
+	                kfree(kbuf);
             kfree(loadfile);
             return reserror;
         }
