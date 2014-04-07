@@ -337,7 +337,7 @@ int sys__execv(const char *program, char **args, int *returnval){
 
     
     
-     i = 0;
+    /* i = 0;
     if(args[i] != NULL){	
      checkargs = (char *)kmalloc(sizeof(char) * 256);	
      reserror = copyin((userptr_t)args, (char *)checkargs, (sizeof(char ) * 256));
@@ -349,7 +349,7 @@ int sys__execv(const char *program, char **args, int *returnval){
      }
      kfree(checkargs); 
      i++;
-   }
+   }*/
 
 
     if(args != NULL){
