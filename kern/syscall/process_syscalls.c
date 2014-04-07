@@ -283,7 +283,7 @@ int sys__execv(const char *program, char **args, int *returnval){
     int numofargs = 0;
     int stacksize = 0;
     char ** kbuf;
-    char * checkargs;
+//    char * checkargs;
 
     char* loadfile;
     int reserror = 0;
