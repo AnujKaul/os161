@@ -139,6 +139,12 @@ thread_create(const char *name)
 		return NULL;
 	}
 
+	if(process_start(thread)!=0)
+	{
+		kfree(thread);
+		
+		return NULL;
+	}
 	
 	thread->t_name = kstrdup(name);
 	if (thread->t_name == NULL) {
@@ -167,18 +173,13 @@ thread_create(const char *name)
 	/* VFS fields */
 	thread->t_cwd = NULL;
 
-	for(i=0;i<256;i++)
+	for(i=0;i<128;i++)
 	{
 		thread->t_filetable[i] = NULL;
 	}
 
 ////Aditya Singla: 03/08/2014
-	if(process_start(thread)!=0)
-	{
-		kfree(thread);
-		
-		return NULL;
-	}
+	
 /////End	
 
 	
@@ -270,6 +271,7 @@ static
 void
 thread_destroy(struct thread *thread)
 {
+	int i = 0;
 	KASSERT(thread != curthread);
 	KASSERT(thread->t_state != S_RUN);
 
@@ -288,12 +290,19 @@ thread_destroy(struct thread *thread)
 	if (thread->t_stack != NULL) {
 		kfree(thread->t_stack);
 	}
+	if(curthread->t_filetable !=NULL)
+	{
+		for(i=0; i<128;i++)
+		{
+			if(curthread->t_filetable[i] != NULL && curthread->t_filetable[i]->ref_count == 1)
+			{
+				kfree(curthread->t_filetable[i]);
+			}
+		}
+	}
 
 	/* Aditya Singla : Clear filetable */
-	/*if(thread->t_filetable !=NULL)
-	{
-		kfree(thread->t_filetable);
-	}*/
+	
 	threadlistnode_cleanup(&thread->t_listnode);
 	thread_machdep_cleanup(&thread->t_machdep);
 
@@ -545,7 +554,7 @@ thread_fork(const char *name,
 
 	/* copy file table and process entries - Aditya Singla*/
 
-	for (i=0;i<256;i++)
+	for (i=0;i<128;i++)
 	{
 		if(curthread->t_filetable[i] != NULL)
 		{
@@ -554,13 +563,13 @@ thread_fork(const char *name,
 		}
 	}
 	
-	if (process_start(newthread) != 0)
+	/*if (process_start(newthread) != 0)
 	{
 		
 		//thread_exit(child);
-		
+		thread_destroy(newthread);
 		return ENOMEM;
-	}
+	}*/
 
 	setParentChildRelation(newthread);
 
@@ -853,13 +862,23 @@ thread_exit(void)
 	struct thread *cur;
 
 	cur = curthread;
-
+	int i = 0;
 	/* VFS fields */
 	if (cur->t_cwd) {
 		VOP_DECREF(cur->t_cwd);
 		cur->t_cwd = NULL;
 	}
-
+	
+	if(curthread->t_filetable !=NULL)
+	{
+		for(i=0; i<128;i++)
+		{
+			if(curthread->t_filetable[i] != NULL && curthread->t_filetable[i]->ref_count == 1)
+			{
+				kfree(curthread->t_filetable[i]);
+			}
+		}
+	}
 	/* VM fields */
 	if (cur->t_addrspace) {
 		/*

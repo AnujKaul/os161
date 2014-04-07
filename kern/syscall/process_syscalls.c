@@ -40,8 +40,8 @@ int process_start(struct thread * thread)
 	int id;
 
 	struct process *process;
+	
 	process = (struct process *)kmalloc(sizeof(struct process));
-		
 	if(process == NULL){
 		kfree(process);
 		return -1;	
@@ -54,6 +54,11 @@ int process_start(struct thread * thread)
 			id = i;
 			break;
 		}
+	}
+	if(id == 0)
+	{
+		kfree(process);
+		return -1;
 	}
 	
 	process->parentId = 0;
@@ -204,6 +209,10 @@ int sys__fork(struct trapframe * tf,int * ret)
 	int intVal;
  	
 	child_tf = (struct trapframe *)kmalloc(sizeof(struct trapframe));
+	if(child_tf == NULL)
+	{
+		return ENOMEM;
+	}
 	struct thread * child;
 	
 	

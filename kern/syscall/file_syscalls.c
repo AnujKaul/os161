@@ -66,7 +66,7 @@ int sys__open(char * filename,int flags, mode_t mode, int* ret)
 	strcpy(file->name,kfilename);
 	file->lk = lock_create(kfilename);
 	//assign a file descriptor to the file - structure declared within the thread
-	for(i=3;i<256;i++)
+	for(i=3;i<128;i++)
 	{
 		if(curthread->t_filetable[i] == NULL)
 		{
@@ -84,7 +84,7 @@ int sys__open(char * filename,int flags, mode_t mode, int* ret)
 int sys__close(int fd, int *ret)
 {
 	
-	if(fd>=255 || fd <0)
+	if(fd>=127 || fd <0)
 	{
 
 		return EBADF;
@@ -130,7 +130,7 @@ int sys__write(int fd,void * buff,size_t nbytes, int *ret)
 	}
 	struct fdesc * file;
 	int err;
-	if(fd > 255 || fd < 0)
+	if(fd > 128 || fd < 0)
 	{
 		kfree(kbuff);
 
@@ -184,7 +184,7 @@ int sys__read(int fd,void * buff,size_t nbytes, int *ret)
 
 		return EFAULT;
 	}
-	if(fd > 255 || fd < 0)
+	if(fd > 128 || fd < 0)
 	{
 		kfree(kbuff);
 
@@ -241,7 +241,7 @@ off_t sys__lseek(int currfiledesc, off_t offsetPos, int whence, off_t *returnval
     off_t retoffset;
     int errcode;
  
-    if(currfiledesc < 3 || currfiledesc > 256 || &currfiledesc == NULL){
+    if(currfiledesc < 3 || currfiledesc > 128 || &currfiledesc == NULL){
         
         return EBADF;
     }
