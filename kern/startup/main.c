@@ -120,7 +120,7 @@ boot(void)
 	/* Now do pseudo-devices. */
 	pseudoconfig();
 	kprintf("\n");
-
+ 
 	/* Late phase of initialization. */
 	vm_bootstrap();
 	kprintf_bootstrap();

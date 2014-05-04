@@ -81,6 +81,7 @@ syscall(struct trapframe *tf)
 {
 	int callno;
 	int32_t retval;
+	void * retptr;
 	int err;
 	off_t pos = 0;
 	int whence;
@@ -168,8 +169,13 @@ syscall(struct trapframe *tf)
 	    case SYS_execv:
 	 	    err = sys__execv((char *)tf->tf_a0,(char **)tf->tf_a1,&retval);
 		    break;
-	    /* Add stuff here */
- 
+            case SYS_sbrk:
+ 	    	    err = sys__sbrk(tf->tf_a0,&retptr);
+		    kprintf("%d\n" ,(int)retptr);
+		    break;
+	    	    
+		/* Add stuff here */
+ 	
 	    default:
 		kprintf("Unknown syscall %d\n", callno);
 		err = ENOSYS;
@@ -187,8 +193,16 @@ syscall(struct trapframe *tf)
 	}
 	else {
 		/* Success. */
-		tf->tf_v0 = retval;
-		tf->tf_a3 = 0;      /* signal no error */
+		if(callno == SYS_sbrk)
+		{
+			tf->tf_v0 = (int)retptr;
+			tf->tf_a3 = 0;      /* signal no error */
+		}
+		else
+		{
+			tf->tf_v0 = retval;
+			tf->tf_a3 = 0;      /* signal no error */
+		}
 	}
 	
 	/*

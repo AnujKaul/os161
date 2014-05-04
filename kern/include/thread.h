@@ -77,7 +77,7 @@ struct thread {
 	const char *t_wchan_name;	/* Name of wait channel, if sleeping */
 	threadstate_t t_state;		/* State this thread is in */
 	//File Table Added Aditya Singla
-	struct fdesc * t_filetable[256];
+	struct fdesc * t_filetable[128];
 	//Process Id Field Added Aditya Singla
 	pid_t processId;
 	/*

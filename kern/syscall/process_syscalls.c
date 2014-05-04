@@ -293,7 +293,7 @@ int sys__execv(const char *program, char **args, int *returnval){
     int numofargs = 0;
     int stacksize = 0;
     char ** kbuf;
-//    char * checkargs;
+    char *checkargs;
 
     char* loadfile;
     int reserror = 0;
@@ -304,7 +304,7 @@ int sys__execv(const char *program, char **args, int *returnval){
     
     /*Get hold of the file name and validate that stupid thing!!!*/
     if(program == NULL){
-        return EINVAL;
+        return EFAULT;
     }
 
     loadfile = (char *)kmalloc(256); // limiting file size to 256 characters.
@@ -318,17 +318,17 @@ int sys__execv(const char *program, char **args, int *returnval){
 
     if(loadfile == NULL){
 		kfree(loadfile);
-        return EINVAL;
+        return EFAULT;
     }
     if(strlen(loadfile) == 0){
 	kfree(loadfile);
-        return EINVAL;
+        return EFAULT;
 
     }
-    if(args[1] == NULL)
+    if(args[0] == NULL)
     {
 	kfree(loadfile);
-	return EINVAL;
+	return EFAULT;
     }
 
 	
@@ -351,19 +351,24 @@ int sys__execv(const char *program, char **args, int *returnval){
 
     
     
-    /* i = 0;
-    if(args[i] != NULL){	
-     checkargs = (char *)kmalloc(sizeof(char) * 256);	
-     reserror = copyin((userptr_t)args, (char *)checkargs, (sizeof(char ) * 256));
-     if(reserror)
-     {
-         kfree(loadfile);
-	*returnval = reserror;
-         return EFAULT;
-     }
-     kfree(checkargs); 
-     i++;
-   }*/
+    //i = 0;
+   // while(1){
+      if(args != NULL){	
+         checkargs = (char *)kmalloc(sizeof(char) * 4);	
+         reserror = copyin((userptr_t)args, (char *)checkargs, (sizeof(char ) * 4));
+         if(reserror)
+         {
+             kfree(loadfile);
+	     *returnval = reserror;
+             return EFAULT;
+         }
+        // kfree(checkargs); 
+        // args++;
+      }
+      //else{
+//	break;
+ //     }
+   //}
 
 
     if(args != NULL){
@@ -511,4 +516,17 @@ int sys__execv(const char *program, char **args, int *returnval){
         panic("enter_new_process returned\n");
         return EINVAL;
 
+}
+
+int sys__sbrk(intptr_t sz, void ** retptr)
+{
+	kprintf("printing size:%ld\n",sz);
+	if(curthread->t_addrspace->heap_end + sz >= curthread->t_addrspace->as_stackvbase)
+	{
+		return ENOMEM;
+	}
+	*retptr = (void *)curthread->t_addrspace->heap_end;	
+	curthread->t_addrspace->heap_end = curthread->t_addrspace->heap_end + sz;
+	
+	return 0;
 }

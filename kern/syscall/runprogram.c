@@ -254,7 +254,7 @@ void initialize_file_table(struct thread * thread)
 			{
 				thread->t_filetable[i]->offset = 0;
 				thread->t_filetable[i]->flag = 0;
-				thread->t_filetable[i]->ref_count = 0;
+				thread->t_filetable[i]->ref_count = 1;
 				thread->t_filetable[i]->lk = lock_create(thread->t_filetable[i]->name);
 				thread->t_filetable[i]->vn = vn;
 			}

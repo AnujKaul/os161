@@ -85,6 +85,8 @@ void sys___exit(int);
 
 int sys__execv(const char *, char **, int *);
 
+int sys__sbrk(intptr_t, void **);
+
 
 
 #endif /* _SYSCALL_H_ */
