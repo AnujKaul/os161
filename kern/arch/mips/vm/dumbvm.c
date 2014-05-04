@@ -260,6 +260,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	struct pagetable * tmp_page;
 	struct addrspace * as;
 	struct pagetable * page_entry;
+	struct region * tmp_region;
 	paddr_t paddr;
 	int pg_count;
 	int i;
@@ -301,6 +302,46 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		}
 		tmp_page = tmp_page->next;
 	}
+
+	
+	tmp_region = as->regions;
+	while(tmp_region !=NULL)
+	{
+		if(faultaddress >= tmp_region->va && faultaddress < tmp_region->va + PAGE_SIZE * tmp_region->no_of_pages)
+		{
+			i = (faultaddress - tmp_region->va) / PAGE_SIZE;
+			page_entry = (struct pagetable *)kmalloc(sizeof(struct pagetable));
+			if(page_entry == NULL)
+			{
+				panic("could not allocate kernel memory\n");
+			}
+			page_entry->va = tmp_region->va + i * PAGE_SIZE;
+			page_entry->pa = alloc_upages(1);
+			page_entry->next = NULL;
+			tmp_page = as->table;
+			if(tmp_page == NULL)
+			{
+				as->table = page_entry;
+			}
+			else
+			{
+				while(tmp_page->next != NULL)
+				{
+					tmp_page = tmp_page->next;
+				}			
+				tmp_page->next = page_entry;
+			}
+			paddr = faultaddress + page_entry->pa - page_entry->va;		
+
+			ehi = faultaddress;
+			elo = paddr | TLBLO_DIRTY | TLBLO_VALID;
+			DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, paddr);
+			tlb_random(ehi, elo);
+			return 0;
+		}
+		tmp_region = tmp_region->next;
+	}
+	
 
 	/* on demand paging for the stack. We only allocate stack pages if the fault address is within 1 page size.
 	Just allocate a physical page and store the fault address in the tlb. Simple it seems. Sould work
@@ -511,15 +552,16 @@ as_zero_region(paddr_t paddr, unsigned npages)
 int
 as_prepare_load(struct addrspace *as)
 {
-	struct region * tmp_region;
+	(void)as;
+	/*struct region * tmp_region;
 	struct pagetable * page_entry;
 	struct pagetable * tmp_page;
 	tmp_region = as->regions;
 	
 	size_t count = 0;
-	size_t i;
+	size_t i;*/
 
-	while(tmp_region != NULL)
+	/*while(tmp_region != NULL)
 	{	
 		// get the region
 		vaddr_t region_base;
@@ -558,7 +600,7 @@ as_prepare_load(struct addrspace *as)
 			}
 		}
 		tmp_region = tmp_region->next;
-	}
+	}*/
 	
 	return 0;
 }
