@@ -197,7 +197,7 @@ alloc_kpages(int npages)
 						coremap[j].cur_state = FIXED;
 						bzero((void*)(PADDR_TO_KVADDR(firstaddr + j * PAGE_SIZE)),PAGE_SIZE);		
 					}
-					coremap[j].num_pages = count;
+					coremap[(i - npages) + 1].num_pages = count;
 					lock_release(lk_core_map);
 					return PADDR_TO_KVADDR(firstaddr + (((i - npages) + 1) * PAGE_SIZE));
 					
