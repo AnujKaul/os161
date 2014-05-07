@@ -192,22 +192,26 @@ void write_page(unsigned int swpindx, paddr_t swap_page){
 void tlb_invalidate(paddr_t paddr)
 {
 	uint32_t ehi,elo,i;
+	lock_acquire(lk_pages);
 	for (i=0; i<NUM_TLB; i++) {
 		tlb_read(&ehi, &elo, i);
 		if ((elo & PAGE_FRAME) == (paddr &  PAGE_FRAME))	{
 			tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
 		}
 	}
+	lock_release(lk_pages);
 }
 
 void tlb_invalidate_all()
 {
 	int i;
+	lock_acquire(lk_pages);
 	for (i=0; i<NUM_TLB; i++) {
 		{
 			tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
 		}
 	}
+	lock_release(lk_pages);
 }
 void handle_pagefault(vaddr_t virt_addr) {
 	paddr_t ppage_tbw = alloc_upages(1);
