@@ -788,7 +788,7 @@ thread_switch(threadstate_t newstate, struct wchan *wc)
 	if (cur->t_addrspace != NULL) {
 		as_activate(cur->t_addrspace);
 	}
-	tlb_invalidate_all();
+
 	/* Clean up dead threads. */
 	exorcise();
 
