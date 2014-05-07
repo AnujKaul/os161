@@ -650,22 +650,23 @@ alloc_kpages(int npages)
 		
 		if(npages == 1)
 		{
-			for(i=0;i<no_of_pages;i++)
+			while(1)
 			{
-				if(coremap[i].cur_state == DIRTY)
+				int index = random()%no_of_pages;
+				if(coremap[index].cur_state == DIRTY)
 				{
-					coremap[i].cur_state = FIXED;
+					coremap[index].cur_state = FIXED;
 					//bzero((void*)(PADDR_TO_KVADDR(firstaddr + j * PAGE_SIZE)),PAGE_SIZE);
-					pgtable = coremap[i].as->table;
+					pgtable = coremap[index].as->table;
 					do{
-						if(pgtable->pa == firstaddr + i * PAGE_SIZE){
+						if(pgtable->pa == firstaddr + index * PAGE_SIZE){
 						pgtable->swap_status = ONDISK;
 						pgtable->indx_swapfile = swap_index;
 						write_page(swap_index,pgtable->pa);				
 						swap_index++;
-						coremap[i].as = NULL;
-						coremap[i].num_pages = 1;
-						bzero((void*)(PADDR_TO_KVADDR(firstaddr + i * PAGE_SIZE)),PAGE_SIZE);	
+						coremap[index].as = NULL;
+						coremap[index].num_pages = 1;
+						bzero((void*)(PADDR_TO_KVADDR(firstaddr + index * PAGE_SIZE)),PAGE_SIZE);	
 						break;
 					}
 						pgtable = pgtable->next;
@@ -679,7 +680,7 @@ alloc_kpages(int npages)
 				}
 				
 				lock_release(lk_core_map);
-				return PADDR_TO_KVADDR(firstaddr + i * PAGE_SIZE);
+				return PADDR_TO_KVADDR(firstaddr + index * PAGE_SIZE);
 					
 			}
 		}
