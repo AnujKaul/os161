@@ -184,7 +184,7 @@ void write_page(unsigned int swpindx, paddr_t swap_page){
 	if(reserror){
 		panic("VM ERROR : Swapping out Failed");
 	}
-	tlb_invalidate_all(swap_page);
+	tlb_invalidate_all();
 }
 
 void tlb_invalidate(paddr_t paddr)
