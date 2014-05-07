@@ -51,7 +51,9 @@ struct vnode;
 struct pagetable{
 	vaddr_t va;
 	paddr_t pa;
-	struct pagetable * next;	
+	struct pagetable * next;
+	char swap_status;
+	int indx_swapfile;	
 
 };
 

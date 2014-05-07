@@ -62,5 +62,13 @@ void free_upages(paddr_t addr);
 void vm_tlbshootdown_all(void);
 void vm_tlbshootdown(const struct tlbshootdown *);
 
+void pageswap(void);
+
+paddr_t seek_victim(int);
+void write_page(unsigned int,paddr_t);
+void tlb_invalidate(paddr_t);
+void handle_pagefault(vaddr_t);
+void read_page(unsigned int, paddr_t);
+
 
 #endif /* _VM_H_ */

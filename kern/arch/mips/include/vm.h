@@ -118,5 +118,7 @@ struct tlbshootdown {
 
 #define TLBSHOOTDOWN_MAX 16
 
+/*Swap functions*/
+
 
 #endif /* _MIPS_VM_H_ */
