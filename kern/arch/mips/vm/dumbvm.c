@@ -576,6 +576,7 @@ paddr_t alloc_upages(int npages)
 			paddr_t returnPhyPage = seek_victim(0);
 			write_page(swap_index,returnPhyPage);				
 			swap_index++;
+			bzero((void*)(PADDR_TO_KVADDR(returnPhyPage)),PAGE_SIZE);			
 			lock_release(lk_core_map);
 			return returnPhyPage;
 		}
