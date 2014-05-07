@@ -69,6 +69,7 @@ void write_page(unsigned int,paddr_t);
 void tlb_invalidate(paddr_t);
 void handle_pagefault(vaddr_t);
 void read_page(unsigned int, paddr_t);
+void tlb_invalidate_all(void);
 
 
 #endif /* _VM_H_ */

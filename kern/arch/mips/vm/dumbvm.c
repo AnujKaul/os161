@@ -198,7 +198,15 @@ void tlb_invalidate(paddr_t paddr)
 	}
 }
 
-
+void tlb_invalidate_all()
+{
+	int i;
+	for (i=0; i<NUM_TLB; i++) {
+		{
+			tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
+		}
+	}
+}
 void handle_pagefault(vaddr_t virt_addr) {
 	paddr_t ppage_tbw = alloc_upages(1);
 	struct pagetable *head;
