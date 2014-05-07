@@ -82,6 +82,7 @@ static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
 struct vnode* swapfile;
 static unsigned long no_of_swap_slots;
 static unsigned int swap_index = 0;
+static struct lock * lk_pages;
 
 
 void
@@ -110,6 +111,7 @@ vm_bootstrap(void)
 		coremap[i].cur_state = FREE;
 	}
 	lk_core_map = lock_create("coremap_lock");
+	lk_pages = lock_create("page_lock");	
 	is_vm_bootstrapped = 1;
 	/* Do nothing. */
 }
@@ -463,9 +465,10 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	struct pagetable * temp_table;
 	struct pagetable * old_table;
 	struct pagetable * new_table;
-
+	
 	new = as_create();
 	if (new==NULL) {
+		lock_release(lk_pages);
 		return ENOMEM;
 	}
 	old_region = old->regions;
@@ -522,6 +525,7 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	new->as_stackvbase = old->as_stackvbase;
 	new->as_stackvtop = old->as_stackvtop;	
 	*ret = new;
+
 	return 0;
 }
 
@@ -591,7 +595,7 @@ void free_upages(paddr_t pa)
 {
 	
 	unsigned long i;
-	
+	lock_acquire(lk_core_map);
 	for(i=0;i<no_of_pages;i++)
 	{
 		if(firstaddr + i * PAGE_SIZE == pa)
@@ -609,6 +613,7 @@ void free_upages(paddr_t pa)
 	{
 		panic("could not free a page\n");
 	}
+	lock_release(lk_core_map);
 }
 
 /* Allocate/free some  kernel-space virtual pages */
@@ -707,6 +712,7 @@ free_kpages(vaddr_t addr)
 	// we will now free the momory. n contineous allocations should be freed
 	unsigned long i;
 	int j;
+	lock_acquire(lk_core_map);
 	for(i=0;i<no_of_pages;i++)
 	{
 		if(PADDR_TO_KVADDR(firstaddr + i * PAGE_SIZE) == addr)
@@ -720,6 +726,7 @@ free_kpages(vaddr_t addr)
 			break;
 		}	
 	}
+	lock_release(lk_core_map);
 
 }
 
@@ -750,7 +757,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	int pg_count;
 	int i;
 	uint32_t ehi, elo;
-
+	lock_acquire(lk_pages);
 	faultaddress &= PAGE_FRAME;
 
 	DEBUG(DB_VM, "dumbvm: fault: 0x%x\n", faultaddress);
@@ -771,8 +778,10 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 
 	as = curthread->t_addrspace;
 	if(as == NULL)
+	{
+				lock_release(lk_pages);		
 		return EFAULT;
-
+	}
 	tmp_page = as->table;
 	while(tmp_page != NULL)
 	{
@@ -788,7 +797,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 			elo = paddr | TLBLO_DIRTY | TLBLO_VALID;
 			DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, paddr);
 			tlb_random(ehi, elo);
-
+		lock_release(lk_pages);		
 			return 0;
 
 		}
@@ -804,6 +813,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 			page_entry = (struct pagetable *)kmalloc(sizeof(struct pagetable));
 			if(page_entry == NULL)
 			{
+					lock_release(lk_pages);		
 				panic("could not allocate kernel memory\n");
 			}
 			page_entry->va = tmp_region->va + i * PAGE_SIZE;
@@ -829,6 +839,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 			elo = paddr | TLBLO_DIRTY | TLBLO_VALID;
 			DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, paddr);
 			tlb_random(ehi, elo);
+					lock_release(lk_pages);		
 			return 0;
 		}
 		tmp_region = tmp_region->next;
@@ -853,6 +864,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		
 		if(page_entry == NULL)
 		{
+					lock_release(lk_pages);		
 			panic("could not allocate kernel memory\n");
 		}
 		page_entry->va = as->as_stackvbase - PAGE_SIZE;
@@ -869,7 +881,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		elo = paddr | TLBLO_DIRTY | TLBLO_VALID;
 		DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, paddr);
 		tlb_random(ehi, elo);
-
+				lock_release(lk_pages);		
  
 		return 0;
 
@@ -895,6 +907,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		
 			if(page_entry == NULL)
 			{
+						lock_release(lk_pages);		
 				panic("could not allocate kernel memory\n");
 			}
 			page_entry->va = as->heap_start + (as->heap_pages + i) * PAGE_SIZE;
@@ -917,10 +930,12 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		}
 		as->heap_pages += pg_count;
 		tlb_random(ehi, elo);
+		lock_release(lk_pages);		
 		return 0;
 	
 		
 	}
+			lock_release(lk_pages);		
 	return EFAULT;
 }
 
