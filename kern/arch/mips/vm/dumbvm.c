@@ -70,7 +70,7 @@
 //declare the coremap. Will be kept static
 
 static struct page * coremap;
-
+static struct lock * lk_tlb;
 static struct lock * lk_core_map;
 static paddr_t firstaddr, lastaddr, freeaddr;
 static unsigned long no_of_pages;
@@ -110,6 +110,7 @@ vm_bootstrap(void)
 		coremap[i].cur_state = FREE;
 	}
 	lk_core_map = lock_create("coremap_lock");
+	lk_tlb = lock_create("tlb_lock");
 	is_vm_bootstrapped = 1;
 	/* Do nothing. */
 }
@@ -752,7 +753,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	uint32_t ehi, elo;
 
 	faultaddress &= PAGE_FRAME;
-
+	lock_acquire(lk_tlb);
 	DEBUG(DB_VM, "dumbvm: fault: 0x%x\n", faultaddress);
 	if(swapfile == NULL)
 	{
@@ -771,8 +772,10 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 
 	as = curthread->t_addrspace;
 	if(as == NULL)
+	{
+		lock_release(lk_tlb);
 		return EFAULT;
-
+	}
 	tmp_page = as->table;
 	while(tmp_page != NULL)
 	{
@@ -788,7 +791,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 			elo = paddr | TLBLO_DIRTY | TLBLO_VALID;
 			DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, paddr);
 			tlb_random(ehi, elo);
-
+			lock_release(lk_tlb);
 			return 0;
 
 		}
@@ -829,6 +832,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 			elo = paddr | TLBLO_DIRTY | TLBLO_VALID;
 			DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, paddr);
 			tlb_random(ehi, elo);
+			lock_release(lk_tlb);
 			return 0;
 		}
 		tmp_region = tmp_region->next;
@@ -853,6 +857,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		
 		if(page_entry == NULL)
 		{
+			lock_release(lk_tlb);
 			panic("could not allocate kernel memory\n");
 		}
 		page_entry->va = as->as_stackvbase - PAGE_SIZE;
@@ -869,7 +874,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		elo = paddr | TLBLO_DIRTY | TLBLO_VALID;
 		DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, paddr);
 		tlb_random(ehi, elo);
-
+		lock_release(lk_tlb);
  
 		return 0;
 
@@ -895,6 +900,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		
 			if(page_entry == NULL)
 			{
+				lock_release(lk_tlb);
 				panic("could not allocate kernel memory\n");
 			}
 			page_entry->va = as->heap_start + (as->heap_pages + i) * PAGE_SIZE;
@@ -917,10 +923,12 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		}
 		as->heap_pages += pg_count;
 		tlb_random(ehi, elo);
+		lock_release(lk_tlb);
 		return 0;
 	
 		
 	}
+	lock_release(lk_tlb);
 	return EFAULT;
 }
 
