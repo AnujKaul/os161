@@ -885,7 +885,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	*/
 	if(faultaddress >= as->heap_start && faultaddress <= as->heap_end)
 	{
-		pg_count = (faultaddress - as->heap_start + as->heap_pages * PAGE_SIZE)/PAGE_SIZE + 1;	
+		pg_count = (faultaddress - as->heap_start + as->heap_pages * PAGE_SIZE)/PAGE_SIZE;	
 		
 		tmp_page = as->table;
 		
