@@ -79,9 +79,9 @@ static int is_vm_bootstrapped = 0;
 static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
 
 // declaration for page swapping - Anuj Kaul zindabaad - Iska code zindabaad tha, zindabaad hai aur zindabaad rahega(sunny deol style)
-struct vnode* swapfile;
+static struct vnode* swapfile;
 static unsigned long no_of_swap_slots;
-static unsigned int swap_index = 0;
+static unsigned int swap_index;
 
 
 void
@@ -111,6 +111,7 @@ vm_bootstrap(void)
 	}
 	lk_core_map = lock_create("coremap_lock");
 	lk_tlb = lock_create("tlb_lock");
+	pageswap();	
 	is_vm_bootstrapped = 1;
 	/* Do nothing. */
 }
@@ -124,6 +125,7 @@ void pageswap(){
 		char * console = kstrdup("lhd0raw:");
 		int result = vfs_open(console, O_RDWR,0664, &swapfile);
 		if(result){
+			kprintf("This is the swap file error:%d\n",result);
 			panic("Virtual Memory Error: Swap space could not be created!!! \n");
 		}
 		
@@ -136,56 +138,52 @@ paddr_t seek_victim(int seltype){
 	//... page was not available request for swap, using the algorithm
 	int index;
 	struct pagetable *pgtable;
-
-	int flag = 0;
-
-
-	if(seltype == 0){ 	// select at random
-
-		while(1){
+	(void)seltype;
+	
+	while(1)
+	{
 
 			index = random()%no_of_pages;
-			if(coremap[index].cur_state==DIRTY){
+			if(coremap[index].cur_state == DIRTY)
+			{
 
-				coremap[index].as = curthread->t_addrspace;
 				pgtable = coremap[index].as->table;
-				do{
-					if(pgtable->pa == firstaddr + index * PAGE_SIZE && pgtable->swap_status != ONDISK){
+				
+				while(pgtable != NULL)
+				{
+					if((pgtable->pa == firstaddr + index * PAGE_SIZE))
+					{
 						pgtable->swap_status = ONDISK;
 						pgtable->indx_swapfile = swap_index;
-						flag = 1;
-						break;
+						pgtable->pa = 0;
+						coremap[index].as = curthread->t_addrspace;
+						return(firstaddr + (index * PAGE_SIZE));
+						
 					}
 					pgtable = pgtable->next;
 
-				}while(pgtable->next != NULL);
+				}
 			}
-			if(flag == 1){
-				break;
-			}
-
-		}
-
 	}
-	else if(seltype == 1){ 	// paging algorithm
-		// likh liya tumne algorithm - DS kar lo pehle
-	}
-
-	return(firstaddr + (index * PAGE_SIZE));
+	panic("lag gaaye");
+	return 0;
+	
 }
 
 void write_page(unsigned int swpindx, paddr_t swap_page){
 
 	struct iovec io_swap;
 	struct uio uio_swap;
-	uio_kinit(&io_swap, &uio_swap,(void*)PADDR_TO_KVADDR(swap_page), PAGE_SIZE, swpindx * PAGE_SIZE, UIO_WRITE);
+	tlb_invalidate(swap_page);	
+	uio_kinit(&io_swap, &uio_swap,(void*)PADDR_TO_KVADDR(swap_page), PAGE_SIZE, swpindx * PAGE_SIZE , UIO_WRITE);
 
 
 	int reserror = VOP_WRITE(swapfile,&uio_swap);
 	if(reserror){
 		panic("VM ERROR : Swapping out Failed");
 	}
-	tlb_invalidate(swap_page);
+	swap_index++;
+	
 }
 
 void tlb_invalidate(paddr_t paddr)
@@ -194,6 +192,7 @@ void tlb_invalidate(paddr_t paddr)
 	for (i=0; i<NUM_TLB; i++) {
 		tlb_read(&ehi, &elo, i);
 		if ((elo & PAGE_FRAME) == (paddr &  PAGE_FRAME))	{
+			//kprintf("i just invalidated a entry\n");
 			tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
 		}
 	}
@@ -208,40 +207,40 @@ void tlb_invalidate_all()
 		}
 	}
 }
-void handle_pagefault(vaddr_t virt_addr) {
+void handle_pagefault(vaddr_t virt_addr, struct addrspace * as) {
+	
 	paddr_t ppage_tbw = alloc_upages(1);
 	struct pagetable *head;
 	struct pagetable *current;
 
-	head = curthread->t_addrspace->table;
+	head = as->table;
 	current = head;
 
-	do{
+	while(current != NULL){
 		if(current->va == virt_addr){
-			if(current->swap_status == ONDISK){
-				//current->indx_swapfile;
-				read_page(current->indx_swapfile,ppage_tbw);
-				current->swap_status=INMEMORY;
-				current->pa = ppage_tbw;
-			}
+			//if(current->swap_status == ONDISK){
+			current->pa = ppage_tbw;			
+			read_page(current->indx_swapfile,ppage_tbw);
+			current->swap_status=INMEMORY;
+			
+			tlb_invalidate(ppage_tbw);
+			//}
 			break;
 		}
 		current = current->next;
-	}while(current->next != NULL);
+	};
 
 
 }
 
 
 void read_page(unsigned int frmflindx, paddr_t swap_to_mem){
-	//if(swap_to_mem >= firstaddr){
-	//	panic("VM ERROR : Again messing in the kernel address space!!");
-	//}
 
 	struct iovec io_swap;
 	struct uio uio_swap;
 	uio_kinit(&io_swap, &uio_swap, (void*)PADDR_TO_KVADDR(swap_to_mem), PAGE_SIZE, frmflindx * PAGE_SIZE , UIO_READ);
 	int result=VOP_READ(swapfile, &uio_swap);
+	
 
 	if(result) {
 		panic("VM ERROR: Swapping in Failed!");
@@ -250,8 +249,6 @@ void read_page(unsigned int frmflindx, paddr_t swap_to_mem){
 }
 
 /****************************************************************************************************/
-
-
 /* Addrspace functions*/
 /*******************************************************************************************************************/
 struct addrspace *
@@ -287,11 +284,11 @@ as_destroy(struct addrspace *as)
 	while(as->table != NULL)
 	{
 		cur_page = as->table;
-		if(cur_page->pa == 0)
-		{
-			KASSERT(cur_page->pa != 0);
-		}
-		if(cur_page->swap_status != ONDISK)
+		//if(cur_page->pa == 0)
+		//{
+		//	KASSERT(cur_page->pa != 0);
+		//}
+		if(cur_page->swap_status == INMEMORY)
 		{
 			free_upages(cur_page->pa);
 		}
@@ -385,9 +382,9 @@ as_prepare_load(struct addrspace *as)
 	tmp_region = as->regions;
 	
 	size_t count = 0;
-	size_t i;*/
+	size_t i;
 
-	/*while(tmp_region != NULL)
+	while(tmp_region != NULL)
 	{	
 		// get the region
 		vaddr_t region_base;
@@ -550,6 +547,7 @@ paddr_t alloc_upages(int npages)
 	unsigned long i;
 	int isPageAvailable = 1;
 	lock_acquire(lk_core_map);
+	paddr_t returnPhyPage;
 	if(npages == 1)
 	{
 		// Just scan through the entire list of coremap entries. Find a free page and allocate it. easy enough. Lets see if it works
@@ -574,9 +572,10 @@ paddr_t alloc_upages(int npages)
 			
 		}
 		if(isPageAvailable == 0){ // i.e. no free physical memory blocks time to free them has come
-			paddr_t returnPhyPage = seek_victim(0);
+			returnPhyPage = seek_victim(0);
+			//kprintf("this is the physical addr allocated:%d\n",returnPhyPage);
 			write_page(swap_index,returnPhyPage);				
-			swap_index++;
+			//swap_index++;
 			bzero((void*)(PADDR_TO_KVADDR(returnPhyPage)),PAGE_SIZE);			
 			lock_release(lk_core_map);
 			return returnPhyPage;
@@ -665,20 +664,24 @@ alloc_kpages(int npages)
 				int index = random()%no_of_pages;
 				if(coremap[index].cur_state == DIRTY)
 				{
-					coremap[index].cur_state = FIXED;
+					
 					//bzero((void*)(PADDR_TO_KVADDR(firstaddr + j * PAGE_SIZE)),PAGE_SIZE);
 					pgtable = coremap[index].as->table;
 					do{
-						if(pgtable->pa == firstaddr + index * PAGE_SIZE){
-						pgtable->swap_status = ONDISK;
-						pgtable->indx_swapfile = swap_index;
-						write_page(swap_index,pgtable->pa);				
-						swap_index++;
-						coremap[index].as = NULL;
-						coremap[index].num_pages = 1;
-						bzero((void*)(PADDR_TO_KVADDR(firstaddr + index * PAGE_SIZE)),PAGE_SIZE);	
-						break;
-					}
+						if(pgtable->pa == firstaddr + index * PAGE_SIZE)
+						{
+							pgtable->swap_status = ONDISK;
+							pgtable->indx_swapfile = swap_index;
+							write_page(swap_index,pgtable->pa);				
+						
+							coremap[index].as = NULL;
+							coremap[index].num_pages = 1;
+							coremap[index].cur_state = FIXED;
+							bzero((void*)(PADDR_TO_KVADDR(firstaddr + index * PAGE_SIZE)),PAGE_SIZE);	
+							lock_release(lk_core_map);
+							return PADDR_TO_KVADDR(firstaddr + index * PAGE_SIZE);
+				
+						}
 						pgtable = pgtable->next;
 					}while(pgtable->next != NULL);
 						
@@ -689,9 +692,7 @@ alloc_kpages(int npages)
 					continue;
 				}
 				
-				lock_release(lk_core_map);
-				return PADDR_TO_KVADDR(firstaddr + index * PAGE_SIZE);
-					
+									
 			}
 		}
 	}
@@ -750,15 +751,12 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	paddr_t paddr;
 	int pg_count;
 	int i;
-	uint32_t ehi, elo;
+	uint32_t ehi, elo, old_ehi, old_elo;
 
 	faultaddress &= PAGE_FRAME;
-	lock_acquire(lk_tlb);
+	
 	DEBUG(DB_VM, "dumbvm: fault: 0x%x\n", faultaddress);
-	if(swapfile == NULL)
-	{
-		pageswap();
-	}
+	
 	switch (faulttype) {
 	    case VM_FAULT_READONLY:
 		/* We always create pages read-write, so we can't get this */
@@ -773,9 +771,10 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	as = curthread->t_addrspace;
 	if(as == NULL)
 	{
-		lock_release(lk_tlb);
+		
 		return EFAULT;
 	}
+	lock_acquire(lk_tlb);	
 	tmp_page = as->table;
 	while(tmp_page != NULL)
 	{
@@ -783,10 +782,13 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		{
 			if(tmp_page->swap_status == ONDISK)
 			{
-				handle_pagefault(tmp_page->va);
+				//tmp_page->pa = alloc_upages(1);
+				handle_pagefault(tmp_page->va, curthread->t_addrspace);
 			}
 			paddr = faultaddress + tmp_page->pa - tmp_page->va;		
-
+			tmp_page->indx_swapfile = 0;
+			tmp_page->swap_status = INMEMORY;
+			//tlb_invalidate_all();
 			ehi = faultaddress;
 			elo = paddr | TLBLO_DIRTY | TLBLO_VALID;
 			DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, paddr);
@@ -873,6 +875,18 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		ehi = faultaddress;
 		elo = paddr | TLBLO_DIRTY | TLBLO_VALID;
 		DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, paddr);
+		
+		for (i=0; i<NUM_TLB; i++) 
+		{
+			tlb_read(&old_ehi, &old_elo, i);
+			if ((old_elo & PAGE_FRAME) == (elo &  PAGE_FRAME))	
+			{
+				kprintf("i just invalidated a entry in stack code\n");
+				tlb_write(ehi, elo, i);
+				lock_release(lk_tlb);
+				return 0;
+			}
+		}
 		tlb_random(ehi, elo);
 		lock_release(lk_tlb);
  
@@ -885,7 +899,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	*/
 	if(faultaddress >= as->heap_start && faultaddress <= as->heap_end)
 	{
-		pg_count = (faultaddress - as->heap_start + as->heap_pages * PAGE_SIZE)/PAGE_SIZE;	
+		pg_count = (faultaddress - as->heap_start + as->heap_pages * PAGE_SIZE)/PAGE_SIZE + 1;	
 		
 		tmp_page = as->table;
 		
@@ -922,6 +936,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 			}
 		}
 		as->heap_pages += pg_count;
+		
 		tlb_random(ehi, elo);
 		lock_release(lk_tlb);
 		return 0;

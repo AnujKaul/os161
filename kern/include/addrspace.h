@@ -53,7 +53,7 @@ struct pagetable{
 	paddr_t pa;
 	struct pagetable * next;
 	char swap_status;
-	int indx_swapfile;	
+	unsigned int indx_swapfile;	
 
 };
 

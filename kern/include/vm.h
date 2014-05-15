@@ -67,7 +67,7 @@ void pageswap(void);
 paddr_t seek_victim(int);
 void write_page(unsigned int,paddr_t);
 void tlb_invalidate(paddr_t);
-void handle_pagefault(vaddr_t);
+void handle_pagefault(vaddr_t, struct addrspace *);
 void read_page(unsigned int, paddr_t);
 void tlb_invalidate_all(void);
 
