@@ -792,6 +792,17 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 			ehi = faultaddress;
 			elo = paddr | TLBLO_DIRTY | TLBLO_VALID;
 			DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, paddr);
+			for (i=0; i<NUM_TLB; i++) 
+			{
+					tlb_read(&old_ehi, &old_elo, i);
+					if ((old_elo & PAGE_FRAME) == (elo &  PAGE_FRAME))	
+					{
+				//		kprintf("i just invalidated a entry in stack code\n");
+						tlb_write(ehi, elo, i);
+						lock_release(lk_tlb);
+						return 0;
+					}
+			}
 			tlb_random(ehi, elo);
 			lock_release(lk_tlb);
 			return 0;
@@ -833,6 +844,17 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 			ehi = faultaddress;
 			elo = paddr | TLBLO_DIRTY | TLBLO_VALID;
 			DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, paddr);
+			for (i=0; i<NUM_TLB; i++) 
+			{	
+				tlb_read(&old_ehi, &old_elo, i);
+				if ((old_elo & PAGE_FRAME) == (elo &  PAGE_FRAME))	
+				{
+			//		kprintf("i just invalidated a entry in stack code\n");
+					tlb_write(ehi, elo, i);
+					lock_release(lk_tlb);
+					return 0;
+				}
+			}
 			tlb_random(ehi, elo);
 			lock_release(lk_tlb);
 			return 0;
@@ -878,14 +900,14 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		
 		for (i=0; i<NUM_TLB; i++) 
 		{
-			tlb_read(&old_ehi, &old_elo, i);
-			if ((old_elo & PAGE_FRAME) == (elo &  PAGE_FRAME))	
-			{
-				kprintf("i just invalidated a entry in stack code\n");
-				tlb_write(ehi, elo, i);
-				lock_release(lk_tlb);
-				return 0;
-			}
+				tlb_read(&old_ehi, &old_elo, i);
+				if ((old_elo & PAGE_FRAME) == (elo &  PAGE_FRAME))	
+				{
+			//		kprintf("i just invalidated a entry in stack code\n");
+					tlb_write(ehi, elo, i);
+					lock_release(lk_tlb);
+					return 0;
+				}
 		}
 		tlb_random(ehi, elo);
 		lock_release(lk_tlb);
@@ -936,7 +958,17 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 			}
 		}
 		as->heap_pages += pg_count;
-		
+		for (i=0; i<NUM_TLB; i++) 
+		{
+				tlb_read(&old_ehi, &old_elo, i);
+				if ((old_elo & PAGE_FRAME) == (elo &  PAGE_FRAME))	
+				{
+			//		kprintf("i just invalidated a entry in stack code\n");
+					tlb_write(ehi, elo, i);
+					lock_release(lk_tlb);
+					return 0;
+				}
+		}
 		tlb_random(ehi, elo);
 		lock_release(lk_tlb);
 		return 0;
