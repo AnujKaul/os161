@@ -792,6 +792,8 @@ thread_switch(threadstate_t newstate, struct wchan *wc)
 	/* Clean up dead threads. */
 	exorcise();
 
+	tlb_invalidate_all();
+
 	/* Turn interrupts back on. */
 	splx(spl);
 }

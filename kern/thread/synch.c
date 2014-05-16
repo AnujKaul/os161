@@ -205,7 +205,7 @@ lock_acquire(struct lock *lock)
 	//KASSERT(curthread->t_in_interrupt == false);
     spinlock_acquire(&lock->lk_lock);
 	// For deadlock
-    KASSERT(lock->lk_thread != curthread);
+    //KASSERT(lock->lk_thread != curthread);
     if(!lock->lk_thread)
 	{
 		lock->lk_thread = curthread;
